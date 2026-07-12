@@ -96,6 +96,14 @@ runs:
   using: "composite"
   steps:
     - name: Set up Python
+      id: setup-python
+      # Every later step's `if:` implicitly requires success() unless it
+      # says otherwise, so without this a failure here would silently skip
+      # the rest of the job -- including checks that don't even need this
+      # specific pinned Python. continue-on-error lets them each still get
+      # a real, independent outcome; "Evaluate gate" is what turns "this
+      # step didn't run" into a loud fail instead of a quiet pass.
+      continue-on-error: true
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
       with:
         python-version: ${{ inputs.python-version }}
@@ -133,8 +141,14 @@ runs:
         INPUTS_SECRETS_EXCLUDE: ${{ inputs.secrets-exclude }}
 
     - name: Install noslop
+      id: install-noslop
       if: inputs.noslop == 'true'
       shell: bash
+      # A yanked pin, a registry outage, or a network policy can fail this
+      # without failing the job outright (see the comment on Set up
+      # Python) -- continue-on-error plus the id lets "Evaluate gate" tell
+      # "this check's install broke" apart from "this check is disabled".
+      continue-on-error: true
       run: python3 -m pip install --quiet "noslop-lint==${INPUTS_NOSLOP_VERSION}"
       env:
         INPUTS_NOSLOP_VERSION: ${{ inputs.noslop-version }}
@@ -177,8 +191,11 @@ runs:
         INPUTS_NOSLOP_DOCS_GLOBS: ${{ inputs.noslop-docs-globs }}
 
     - name: Install zizmor
+      id: install-zizmor
       if: inputs.zizmor == 'true'
       shell: bash
+      # See the comment on "Install noslop" -- same reasoning.
+      continue-on-error: true
       run: python3 -m pip install --quiet zizmor
 
     - name: zizmor
@@ -230,8 +247,11 @@ runs:
         INPUTS_SKILLXRAY_PATH: ${{ inputs.skillxray-path }}
 
     - name: Install skillxray
+      id: install-skillxray
       if: inputs.skillxray == 'true' && steps.skillxray-detect.outputs.target != ''
       shell: bash
+      # See the comment on "Install noslop" -- same reasoning.
+      continue-on-error: true
       run: python3 -m pip install --quiet "git+https://github.com/munzzyy/skillxray@${INPUTS_SKILLXRAY_REF}"
       env:
         INPUTS_SKILLXRAY_REF: ${{ inputs.skillxray-ref }}
@@ -274,44 +294,24 @@ runs:
       id: evaluate
       if: always()
       shell: bash
-      run: |
-        failed=0
-        {
-          echo ""
-          echo "## Result"
-          echo ""
-        } >> "$GITHUB_STEP_SUMMARY"
-        for name in secrets noslop zizmor skillxray; do
-          outcome=""
-          case "$name" in
-            secrets)   outcome="${STEPS_SECRETS_OUTCOME}" ;;
-            noslop)    outcome="${STEPS_NOSLOP_OUTCOME}" ;;
-            zizmor)    outcome="${STEPS_ZIZMOR_OUTCOME}" ;;
-            skillxray) outcome="${STEPS_SKILLXRAY_OUTCOME}" ;;
-          esac
-          case "$outcome" in
-            failure)
-              echo "- $name: FAIL" >> "$GITHUB_STEP_SUMMARY"
-              failed=1
-              ;;
-            success)
-              echo "- $name: pass" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-            *)
-              echo "- $name: skipped" >> "$GITHUB_STEP_SUMMARY"
-              ;;
-          esac
-        done
-        echo "" >> "$GITHUB_STEP_SUMMARY"
-        if [ "$failed" = "1" ]; then
-          echo "**ci-safety-gate: FAIL**" >> "$GITHUB_STEP_SUMMARY"
-          echo "result=fail" >> "$GITHUB_OUTPUT"
-          exit 1
-        fi
-        echo "**ci-safety-gate: PASS**" >> "$GITHUB_STEP_SUMMARY"
-        echo "result=pass" >> "$GITHUB_OUTPUT"
+      # The decision itself lives in evaluate_gate.py (unit tested in
+      # tests/test_evaluate_gate.py) rather than inline here, because a
+      # bare case statement on each scan step's own outcome can't tell "this
+      # check is disabled" apart from "this check's install broke and it
+      # never ran" -- both read as outcome=skipped. The install steps'
+      # outcomes are what let it tell those apart.
+      run: python3 "${{ github.action_path }}/evaluate_gate.py"
       env:
+        STEPS_SETUP_PYTHON_OUTCOME: ${{ steps.setup-python.outcome }}
+        INPUTS_SECRETS: ${{ inputs.secrets }}
         STEPS_SECRETS_OUTCOME: ${{ steps.secrets.outcome }}
+        INPUTS_NOSLOP: ${{ inputs.noslop }}
+        STEPS_INSTALL_NOSLOP_OUTCOME: ${{ steps.install-noslop.outcome }}
         STEPS_NOSLOP_OUTCOME: ${{ steps.noslop.outcome }}
+        INPUTS_ZIZMOR: ${{ inputs.zizmor }}
+        STEPS_INSTALL_ZIZMOR_OUTCOME: ${{ steps.install-zizmor.outcome }}
         STEPS_ZIZMOR_OUTCOME: ${{ steps.zizmor.outcome }}
+        INPUTS_SKILLXRAY: ${{ inputs.skillxray }}
+        STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET: ${{ steps.skillxray-detect.outputs.target }}
+        STEPS_INSTALL_SKILLXRAY_OUTCOME: ${{ steps.install-skillxray.outcome }}
         STEPS_SKILLXRAY_OUTCOME: ${{ steps.skillxray.outcome }}
