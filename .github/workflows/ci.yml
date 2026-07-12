@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest
+      - name: Run the scan_secrets.py test suite
+        run: python -m pytest tests/ -v
+
+  self-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Install noslop
+        run: python -m pip install --quiet noslop-lint==0.10.0
+      - name: noslop over this repo's own code
+        run: git ls-files -z -- '*.py' | xargs -0r noslop --no-config
+      - name: noslop over this repo's own docs
+        run: git ls-files -z -- '*.md' | xargs -0r noslop --no-config --markdown
+      - name: Install zizmor
+        run: python -m pip install --quiet zizmor
+      - name: zizmor over this repo's own action and workflows
+        run: zizmor --offline --no-progress --color never .
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # Verify the exact commands action.yml runs actually work, not just that the
+      # YAML parses. This is the part a `uses: ./` invocation alone wouldn't prove.
+      - name: Install noslop the way action.yml does
+        run: python -m pip install --quiet noslop-lint==0.10.0
+      - name: Run noslop the way action.yml does, against the clean example
+        run: git ls-files -z -- examples/demo/*.py | xargs -0r noslop --no-config --code
+      - name: Run scan_secrets.py the way action.yml does, against the clean example
+        run: python3 scan_secrets.py examples/demo --summary
+
+      - name: Prove scan_secrets.py fails on a planted credential
+        run: |
+          mkdir -p "$RUNNER_TEMP/negative"
+          python3 -c "print('token = ' + repr('ghp_' + '0' * 36))" > "$RUNNER_TEMP/negative/leak.py"
+          if python3 scan_secrets.py "$RUNNER_TEMP/negative"; then
+            echo "expected scan_secrets.py to exit non-zero on a planted credential" >&2
+            exit 1
+          fi
+          echo "confirmed: scan_secrets.py exits non-zero on a planted credential"
+
+      # Now prove the composite action itself is wired correctly, using a local
+      # `uses: ./` reference against this same checkout.
+      - name: Composite action passes against this repo (dogfood, all checks on)
+        uses: ./
+
+      - name: Composite action's skillxray step auto-skips with no skill content
+        id: auto_skip
+        uses: ./
+        with:
+          noslop: "false"
+          zizmor: "false"
+          secrets: "false"
+          skillxray: "true"
+
+      - name: Plant a fake credential outside the checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/negative-gate"
+          python3 -c "print('token = ' + repr('ghp_' + '1' * 36))" > "$RUNNER_TEMP/negative-gate/leak.py"
+
+      - name: Composite action fails on the planted credential
+        id: negative_gate
+        continue-on-error: true
+        uses: ./
+        with:
+          noslop: "false"
+          zizmor: "false"
+          skillxray: "false"
+          secrets: "true"
+          secrets-path: ${{ runner.temp }}/negative-gate
+
+      - name: Assert the negative case actually failed
+        env:
+          NEGATIVE_GATE_OUTCOME: ${{ steps.negative_gate.outcome }}
+        run: |
+          if [ "$NEGATIVE_GATE_OUTCOME" != "failure" ]; then
+            echo "expected the gate to fail on a planted credential, got: $NEGATIVE_GATE_OUTCOME" >&2
+            exit 1
+          fi
+          echo "confirmed: the composite action fails the job when a check fails"
