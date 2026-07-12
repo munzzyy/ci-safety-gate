@@ -209,6 +209,63 @@ def test_binary_file_is_skipped(tmp_path):
     assert skipped == [("blob.bin", "binary")]
 
 
+def test_utf16_le_bom_file_is_scanned_not_skipped_as_binary(tmp_path):
+    # Windows tooling (PowerShell, some .env writers) emits UTF-16LE with a
+    # BOM. ASCII-range text encoded that way is ~50% \x00 bytes by
+    # construction -- a raw null-byte check alone would wrongly call this
+    # binary and skip it before the credential regexes ever run.
+    _, secret = CREDENTIALS["aws_access_key"]
+    content = f'$env:AWS_ACCESS_KEY_ID = "{secret}"\n'
+    data = b"\xff\xfe" + content.encode("utf-16-le")
+    (tmp_path / "secrets.env").write_bytes(data)
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+
+    assert scanned == 1
+    assert skipped == []
+    assert len(findings) == 1
+    assert findings[0].rule == "AWS access key ID"
+    assert findings[0].line == 1
+
+
+def test_utf16_be_bom_file_is_scanned_not_skipped_as_binary(tmp_path):
+    _, secret = CREDENTIALS["github_classic"]
+    content = f'token = "{secret}"\n'
+    data = b"\xfe\xff" + content.encode("utf-16-be")
+    (tmp_path / "secrets.env").write_bytes(data)
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+
+    assert scanned == 1
+    assert skipped == []
+    assert len(findings) == 1
+    assert findings[0].rule == "GitHub token"
+
+
+def test_utf16_bom_file_without_a_secret_is_clean(tmp_path):
+    data = b"\xff\xfe" + "just some ordinary text\n".encode("utf-16-le")
+    (tmp_path / "notes.env").write_bytes(data)
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert scanned == 1
+    assert skipped == []
+    assert findings == []
+
+
+def test_genuinely_binary_file_without_a_bom_is_still_skipped(tmp_path):
+    # A real binary blob whose first two bytes happen to not be a UTF-16 BOM
+    # must still be classified as binary -- the BOM check narrows the
+    # exemption, it doesn't loosen the general null-byte heuristic.
+    _, secret = CREDENTIALS["openai_key"]
+    data = bytes(range(256)) * 8 + secret.encode("ascii")
+    (tmp_path / "blob.bin").write_bytes(data)
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert findings == []
+    assert scanned == 0
+    assert skipped == [("blob.bin", "binary")]
+
+
 def test_default_skip_dirs_are_never_walked(tmp_path):
     _, secret = CREDENTIALS["github_oauth"]
     git_dir = tmp_path / ".git"

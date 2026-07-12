@@ -69,7 +69,21 @@ def _newline_offsets(text: str) -> list[int]:
     return [i for i, ch in enumerate(text) if ch == "\n"]
 
 
+# A BOM is the reliable signal for "this is UTF-16 text", not "this is
+# binary" -- ASCII-range UTF-16 is roughly half \x00 bytes by construction
+# (each codepoint is stored as its byte plus a 0x00), which looks exactly
+# like binary data to a raw null-byte check. Windows tooling (PowerShell,
+# some .env writers) emits files this way.
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+
+
+def is_utf16_bom(data: bytes) -> bool:
+    return data[:2] in _UTF16_BOMS
+
+
 def is_binary(data: bytes) -> bool:
+    if is_utf16_bom(data):
+        return False
     return b"\x00" in data[:8192]
 
 
@@ -109,7 +123,10 @@ def scan_file(fp: Path, rel_label: str, max_bytes: int):
     if is_binary(data):
         return [], "binary"
 
-    text = data.decode("utf-8", errors="replace")
+    # The "utf-16" codec auto-detects LE vs BE from the BOM and strips it,
+    # so the credential regexes see the same plain text either encoding
+    # produces.
+    text = data.decode("utf-16" if is_utf16_bom(data) else "utf-8", errors="replace")
     offsets = _newline_offsets(text)
     findings = []
     for rule, pattern in PATTERNS:
