@@ -1,0 +1,317 @@
+name: "CI Safety Gate"
+description: >-
+  One pass/fail gate that bundles AI-slop detection (noslop), a GitHub
+  Actions security audit (zizmor), an agent-skill scanner (skillxray), and a
+  bundled secrets grep, with a combined summary in the job.
+author: "Cole Munz"
+
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  python-version:
+    description: "Python version used to install and run the bundled checks."
+    required: false
+    default: "3.12"
+
+  noslop:
+    description: "Run noslop AI-slop detection over source and docs."
+    required: false
+    default: "true"
+  noslop-version:
+    description: "Pinned noslop-lint version to install from PyPI."
+    required: false
+    default: "0.10.0"
+  noslop-code-globs:
+    description: "Space-separated git pathspec globs scored in code mode."
+    required: false
+    default: "*.py *.js *.jsx *.ts *.tsx *.go *.rs *.sh *.rb"
+  noslop-docs-globs:
+    description: "Space-separated git pathspec globs scored in prose mode."
+    required: false
+    default: "*.md"
+  noslop-threshold:
+    description: "Score at/above which noslop exits non-zero (its own default is 10)."
+    required: false
+    default: ""
+
+  zizmor:
+    description: "Run zizmor's GitHub Actions security audit."
+    required: false
+    default: "true"
+  zizmor-path:
+    description: "Path zizmor audits (workflows and any action.yml under it)."
+    required: false
+    default: "."
+  zizmor-min-severity:
+    description: "Minimum severity zizmor reports (informational|low|medium|high)."
+    required: false
+    default: "medium"
+  zizmor-offline:
+    description: "Restrict zizmor to offline audits (no GitHub API calls, no token needed)."
+    required: false
+    default: "true"
+
+  skillxray:
+    description: "Run skillxray over any SKILL.md / skills / .claude content in the repo."
+    required: false
+    default: "true"
+  skillxray-ref:
+    description: "Git tag of munzzyy/skillxray to install (it installs from source until it's on PyPI)."
+    required: false
+    default: "v0.1.1"
+  skillxray-path:
+    description: "Path to scan. Leave empty to auto-detect SKILL.md / skills/ / .claude and skip cleanly if none exist."
+    required: false
+    default: ""
+  skillxray-fail-on:
+    description: "Minimum severity that fails skillxray (critical|high|medium|low|none)."
+    required: false
+    default: "high"
+
+  secrets:
+    description: "Run the bundled stdlib secrets scan (scan_secrets.py)."
+    required: false
+    default: "true"
+  secrets-path:
+    description: "Path the secrets scan walks."
+    required: false
+    default: "."
+  secrets-exclude:
+    description: "Space-separated glob(s), relative to secrets-path, to skip."
+    required: false
+    default: ""
+  secrets-max-bytes:
+    description: "Skip files larger than this many bytes."
+    required: false
+    default: "2000000"
+
+outputs:
+  result:
+    description: "'pass' or 'fail', the combined verdict across every enabled check."
+    value: ${{ steps.evaluate.outputs.result }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Start the combined summary
+      shell: bash
+      run: |
+        {
+          echo "# CI Safety Gate"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Secrets scan
+      id: secrets
+      if: inputs.secrets == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+        set -f  # exclude patterns are globs for scan_secrets.py, not for bash to expand
+        args=("${INPUTS_SECRETS_PATH}" --max-bytes "${INPUTS_SECRETS_MAX_BYTES}" --summary)
+        if [ -n "${INPUTS_SECRETS_EXCLUDE}" ]; then
+          for pat in ${INPUTS_SECRETS_EXCLUDE}; do
+            args+=(--exclude "$pat")
+          done
+        fi
+        set +f
+        python3 "${{ github.action_path }}/scan_secrets.py" "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
+        code=$?
+        set -e
+        exit "$code"
+      env:
+        INPUTS_SECRETS_PATH: ${{ inputs.secrets-path }}
+        INPUTS_SECRETS_MAX_BYTES: ${{ inputs.secrets-max-bytes }}
+        INPUTS_SECRETS_EXCLUDE: ${{ inputs.secrets-exclude }}
+
+    - name: Install noslop
+      if: inputs.noslop == 'true'
+      shell: bash
+      run: python3 -m pip install --quiet "noslop-lint==${INPUTS_NOSLOP_VERSION}"
+      env:
+        INPUTS_NOSLOP_VERSION: ${{ inputs.noslop-version }}
+
+    - name: noslop
+      id: noslop
+      if: inputs.noslop == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+        set -f  # don't let bash glob-expand the *.py style patterns itself; git does its own matching
+        out="$RUNNER_TEMP/noslop.out"
+        : > "$out"
+        threshold_args=()
+        if [ -n "${INPUTS_NOSLOP_THRESHOLD}" ]; then
+          threshold_args=(--threshold "${INPUTS_NOSLOP_THRESHOLD}")
+        fi
+        git -C "${{ github.workspace }}" ls-files -z -- ${INPUTS_NOSLOP_CODE_GLOBS} \
+          | xargs -0r noslop --no-config --code "${threshold_args[@]}" >> "$out" 2>&1
+        code_a=$?
+        git -C "${{ github.workspace }}" ls-files -z -- ${INPUTS_NOSLOP_DOCS_GLOBS} \
+          | xargs -0r noslop --no-config --markdown "${threshold_args[@]}" >> "$out" 2>&1
+        code_b=$?
+        set +f
+        {
+          echo "## noslop (AI-slop detection)"
+          echo ""
+          echo '```'
+          cat "$out"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        set -e
+        if [ "$code_a" -ne 0 ] || [ "$code_b" -ne 0 ]; then
+          exit 1
+        fi
+      env:
+        INPUTS_NOSLOP_THRESHOLD: ${{ inputs.noslop-threshold }}
+        INPUTS_NOSLOP_CODE_GLOBS: ${{ inputs.noslop-code-globs }}
+        INPUTS_NOSLOP_DOCS_GLOBS: ${{ inputs.noslop-docs-globs }}
+
+    - name: Install zizmor
+      if: inputs.zizmor == 'true'
+      shell: bash
+      run: python3 -m pip install --quiet zizmor
+
+    - name: zizmor
+      id: zizmor
+      if: inputs.zizmor == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+        out="$RUNNER_TEMP/zizmor.out"
+        offline_flag=""
+        if [ "${INPUTS_ZIZMOR_OFFLINE}" = "true" ]; then
+          offline_flag="--offline"
+        fi
+        zizmor --no-progress --color never $offline_flag \
+          --min-severity "${INPUTS_ZIZMOR_MIN_SEVERITY}" \
+          "${INPUTS_ZIZMOR_PATH}" > "$out" 2>&1
+        code=$?
+        {
+          echo "## zizmor (GitHub Actions security audit)"
+          echo ""
+          echo '```'
+          cat "$out"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        set -e
+        exit "$code"
+      env:
+        INPUTS_ZIZMOR_OFFLINE: ${{ inputs.zizmor-offline }}
+        INPUTS_ZIZMOR_MIN_SEVERITY: ${{ inputs.zizmor-min-severity }}
+        INPUTS_ZIZMOR_PATH: ${{ inputs.zizmor-path }}
+
+    - name: Detect skill-shaped content
+      id: skillxray-detect
+      if: inputs.skillxray == 'true'
+      shell: bash
+      run: |
+        target="${INPUTS_SKILLXRAY_PATH}"
+        if [ -z "$target" ]; then
+          if find "${{ github.workspace }}" -maxdepth 6 \
+               \( -path '*/.git' -o -path '*/node_modules' \) -prune -o \
+               \( -name 'SKILL.md' -o -type d -name 'skills' -o -type d -name '.claude' \) -print \
+               2>/dev/null | grep -q .; then
+            target="${{ github.workspace }}"
+          fi
+        fi
+        echo "target=$target" >> "$GITHUB_OUTPUT"
+      env:
+        INPUTS_SKILLXRAY_PATH: ${{ inputs.skillxray-path }}
+
+    - name: Install skillxray
+      if: inputs.skillxray == 'true' && steps.skillxray-detect.outputs.target != ''
+      shell: bash
+      run: python3 -m pip install --quiet "git+https://github.com/munzzyy/skillxray@${INPUTS_SKILLXRAY_REF}"
+      env:
+        INPUTS_SKILLXRAY_REF: ${{ inputs.skillxray-ref }}
+
+    - name: skillxray
+      id: skillxray
+      if: inputs.skillxray == 'true' && steps.skillxray-detect.outputs.target != ''
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+        out="$RUNNER_TEMP/skillxray.out"
+        python3 -m skillxray "${STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET}" \
+          --fail-on "${INPUTS_SKILLXRAY_FAIL_ON}" --no-color > "$out" 2>&1
+        code=$?
+        {
+          echo "## skillxray (agent-skill scanner)"
+          echo ""
+          echo '```'
+          cat "$out"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        set -e
+        exit "$code"
+      env:
+        STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET: ${{ steps.skillxray-detect.outputs.target }}
+        INPUTS_SKILLXRAY_FAIL_ON: ${{ inputs.skillxray-fail-on }}
+
+    - name: Note skipped skillxray
+      if: inputs.skillxray == 'true' && steps.skillxray-detect.outputs.target == ''
+      shell: bash
+      run: |
+        {
+          echo "## skillxray (agent-skill scanner)"
+          echo ""
+          echo "skipped: no SKILL.md, skills/, or .claude/ found"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Evaluate gate
+      id: evaluate
+      if: always()
+      shell: bash
+      run: |
+        failed=0
+        {
+          echo ""
+          echo "## Result"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+        for name in secrets noslop zizmor skillxray; do
+          outcome=""
+          case "$name" in
+            secrets)   outcome="${STEPS_SECRETS_OUTCOME}" ;;
+            noslop)    outcome="${STEPS_NOSLOP_OUTCOME}" ;;
+            zizmor)    outcome="${STEPS_ZIZMOR_OUTCOME}" ;;
+            skillxray) outcome="${STEPS_SKILLXRAY_OUTCOME}" ;;
+          esac
+          case "$outcome" in
+            failure)
+              echo "- $name: FAIL" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+              ;;
+            success)
+              echo "- $name: pass" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "- $name: skipped" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+        done
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        if [ "$failed" = "1" ]; then
+          echo "**ci-safety-gate: FAIL**" >> "$GITHUB_STEP_SUMMARY"
+          echo "result=fail" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+        echo "**ci-safety-gate: PASS**" >> "$GITHUB_STEP_SUMMARY"
+        echo "result=pass" >> "$GITHUB_OUTPUT"
+      env:
+        STEPS_SECRETS_OUTCOME: ${{ steps.secrets.outcome }}
+        STEPS_NOSLOP_OUTCOME: ${{ steps.noslop.outcome }}
+        STEPS_ZIZMOR_OUTCOME: ${{ steps.zizmor.outcome }}
+        STEPS_SKILLXRAY_OUTCOME: ${{ steps.skillxray.outcome }}
