@@ -1,0 +1,23 @@
+name: safety-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - uses: munzzyy/ci-safety-gate@v0.1.0
+        # every check defaults to on; turn one off explicitly if it doesn't apply
+        with:
+          skillxray: "true"   # auto-skips cleanly if there's no SKILL.md / skills/ / .claude
+          zizmor-offline: "true"
