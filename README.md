@@ -89,3 +89,7 @@ the action's own workflow.
 ## License
 
 MIT — free to use, change, and ship, commercial or not. See [LICENSE](LICENSE).
+
+## Support
+
+If the gate caught something before it merged, [sponsoring](https://github.com/sponsors/munzzyy) is what keeps it maintained.
