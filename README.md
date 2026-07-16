@@ -63,6 +63,62 @@ The gate runs live on [munzzyy/munzzyy](https://github.com/munzzyy/munzzyy/actio
 noslop and the secrets scan over the repo, zizmor over its workflow, and skillxray skipping
 cleanly because there's nothing skill-shaped to scan.
 
+## Running the gate locally
+
+This repo also ships a small Python package, so you can run the exact same checks on your
+own machine before you open a PR, instead of finding out from a red CI run:
+
+```
+git clone https://github.com/munzzyy/ci-safety-gate
+cd ci-safety-gate
+pip install -e .
+
+cd /path/to/your-repo
+ci-safety-gate --local
+```
+
+(or, from inside this checkout with no install at all: `python -m ci_safety_gate --local`.)
+
+`--local` runs the same commands action.yml's composite steps run — noslop and zizmor over
+your tracked files, skillxray if it finds `SKILL.md` / `skills/` / `.claude`, the bundled
+secrets scan — against a directory you point it at (default `.`), hands the result to the
+same `evaluate_gate.py` the action itself calls, and prints the same combined summary to your
+terminal instead of `$GITHUB_STEP_SUMMARY`. Same verdict, same exit code.
+
+Every `action.yml` input has a matching flag — `--no-noslop`, `--zizmor-min-severity`,
+`--secrets-exclude`, and so on. Run `ci-safety-gate --help` for the full list. Defaults come
+straight out of `action.yml` at run time rather than a hand-copied second set, so a version
+bump or threshold change there shows up here for free.
+
+A scanner that isn't installed fails loud instead of skipping quietly:
+
+```
+## zizmor (GitHub Actions security audit)
+
+zizmor did not run (not installed): install with `pip install zizmor`, or re-run with
+--install-missing to do it automatically.
+```
+
+Pass `--install-missing` and it runs the exact `pip install` action.yml's own install steps
+run (same pins, same skillxray git ref) instead of just naming the command.
+
+### Known limitations
+
+- `--local` only works from a checkout of this repo (`git clone` + `pip install -e .`), since
+  it reads its defaults straight out of the real `action.yml` on disk instead of a bundled
+  copy. A real, non-editable PyPI wheel would need `action.yml` shipped as package data for
+  this to keep working — a follow-up for whenever this package is actually published, not
+  solved yet.
+- The flags mirror `action.yml`'s inputs, but the literal commands each check runs
+  (`ci_safety_gate/checks.py`) are still a second, hand-written copy of the bash in
+  `action.yml` — rewriting the composite action to call into this package would close that
+  gap for good, but that's a bigger, riskier change than this pass makes.
+  `tests/test_checks.py` asserts every flag `checks.py` builds is still literally present in
+  `action.yml`'s own bash, so the two failing to match is a test failure, not a silent drift.
+- `--local` uses whatever Python, noslop, zizmor, and skillxray are already on your `PATH`
+  (or installs them with `--install-missing`); it doesn't manage a separate pinned
+  `python-version` the way the composite action does.
+
 ## What this does not do
 
 - It's an orchestrator, not a detector. The actual detection quality is whatever noslop,

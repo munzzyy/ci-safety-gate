@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ci-safety-gate"
+version = "0.1.0"
+description = "Run the exact noslop/zizmor/skillxray/secrets gate munzzyy/ci-safety-gate runs in CI, locally, before you open a PR."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Cole Munz" }]
+dependencies = []
+keywords = ["ci", "github-actions", "security", "noslop", "zizmor", "skillxray",
+            "secrets-scanning", "pre-commit", "sast"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://github.com/munzzyy/ci-safety-gate"
+Issues = "https://github.com/munzzyy/ci-safety-gate/issues"
+
+[project.scripts]
+ci-safety-gate = "ci_safety_gate.cli:main"
+
+[tool.setuptools]
+py-modules = ["evaluate_gate", "scan_secrets"]
+
+[tool.setuptools.packages.find]
+include = ["ci_safety_gate*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
