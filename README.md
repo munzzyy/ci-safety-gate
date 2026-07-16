@@ -59,6 +59,10 @@ report with a heading per check, followed by a `## Result` section that lists pa
 skipped per check and the overall verdict. The job step itself fails if any enabled check
 failed; a skipped check (disabled, or skillxray finding nothing to scan) never fails it.
 
+The gate runs live on [munzzyy/munzzyy](https://github.com/munzzyy/munzzyy/actions/workflows/gate.yml):
+noslop and the secrets scan over the repo, zizmor over its workflow, and skillxray skipping
+cleanly because there's nothing skill-shaped to scan.
+
 ## What this does not do
 
 - It's an orchestrator, not a detector. The actual detection quality is whatever noslop,
