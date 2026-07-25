@@ -13,12 +13,16 @@ from __future__ import annotations
 import sys
 
 
-def secrets_argv(path: str, max_bytes: int, excludes: list[str]) -> list[str]:
+def secrets_argv(path: str, max_bytes: int, excludes: list[str],
+                 fail_on_skip: bool = False) -> list[str]:
     """Matches action.yml's "Secrets scan" step exactly: path, then
-    --max-bytes, --summary, then one --exclude per pattern."""
+    --max-bytes, --summary, one --exclude per pattern, and --fail-on-skip
+    last when the secrets-fail-on-skip input is on."""
     argv = [path, "--max-bytes", str(max_bytes), "--summary"]
     for pattern in excludes:
         argv += ["--exclude", pattern]
+    if fail_on_skip:
+        argv.append("--fail-on-skip")
     return argv
 
 

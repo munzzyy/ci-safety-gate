@@ -86,6 +86,10 @@ inputs:
     description: "Skip files larger than this many bytes."
     required: false
     default: "2000000"
+  secrets-fail-on-skip:
+    description: "Fail the secrets scan if any file was skipped (too large, unreadable, binary) instead of only reporting it. Default reports skips without failing."
+    required: false
+    default: "false"
 
 outputs:
   result:
@@ -131,6 +135,9 @@ runs:
           done
         fi
         set +f
+        if [ "${INPUTS_SECRETS_FAIL_ON_SKIP}" = "true" ]; then
+          args+=(--fail-on-skip)
+        fi
         python3 "${{ github.action_path }}/scan_secrets.py" "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
         code=$?
         set -e
@@ -139,6 +146,7 @@ runs:
         INPUTS_SECRETS_PATH: ${{ inputs.secrets-path }}
         INPUTS_SECRETS_MAX_BYTES: ${{ inputs.secrets-max-bytes }}
         INPUTS_SECRETS_EXCLUDE: ${{ inputs.secrets-exclude }}
+        INPUTS_SECRETS_FAIL_ON_SKIP: ${{ inputs.secrets-fail-on-skip }}
 
     - name: Install noslop
       id: install-noslop

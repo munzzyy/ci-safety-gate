@@ -277,3 +277,18 @@ def test_run_secrets_fails_on_a_planted_credential(tmp_path):
     assert install_outcome is None
     assert scan_outcome == "failure"
     assert "Secrets scan" in summary
+
+
+def test_run_secrets_fail_on_skip_turns_a_skip_into_a_failure(tmp_path):
+    # An oversized file is a skip, not a finding. Without the flag the scan
+    # still passes; with it, run_secrets must report scan_outcome "failure"
+    # so evaluate_gate.decide_check turns the gate FAIL.
+    (tmp_path / "big.py").write_text("x" * 200, encoding="utf-8")
+
+    _, scan_outcome_default, _ = runner.run_secrets(tmp_path, ".", 50, [])
+    assert scan_outcome_default == "success"
+
+    _, scan_outcome_strict, summary = runner.run_secrets(tmp_path, ".", 50, [], fail_on_skip=True)
+    assert scan_outcome_strict == "failure"
+    assert "big.py" in summary
+    assert "too large" in summary

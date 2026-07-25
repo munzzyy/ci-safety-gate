@@ -82,11 +82,14 @@ def _git_ls_files(root: Path, globs: str) -> tuple[list[str], str]:
     return [p.decode("utf-8", errors="replace") for p in raw if p], ""
 
 
-def run_secrets(root: Path, path: str, max_bytes: int, excludes: list[str]) -> tuple[None, str, str]:
+def run_secrets(root: Path, path: str, max_bytes: int, excludes: list[str],
+                fail_on_skip: bool = False) -> tuple[None, str, str]:
     """secrets is stdlib-only -- no install step, install_outcome is
-    always None, matching decide_check's convention for it."""
+    always None, matching decide_check's convention for it. When
+    fail_on_skip is set, scan_secrets.py exits non-zero on any skipped file,
+    so the returncode below turns a silent under-scan into a real FAIL."""
     script = Path(__file__).resolve().parent.parent / "scan_secrets.py"
-    argv = [sys.executable, str(script), *checks.secrets_argv(path, max_bytes, excludes)]
+    argv = [sys.executable, str(script), *checks.secrets_argv(path, max_bytes, excludes, fail_on_skip)]
     proc = subprocess.run(argv, cwd=str(root), capture_output=True, text=True)
     # scan_secrets.py's own --summary output already starts with "## Secrets
     # scan", so its stdout *is* the section -- no extra wrapping needed.

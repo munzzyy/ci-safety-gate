@@ -8,7 +8,9 @@ tokens, OpenAI/Anthropic/Stripe API keys, and PEM private key blocks.
 
 Matched values are never printed in full. Exit code 0 means clean, 1 means
 at least one credential-shaped string was found, 2 means the scan itself
-could not run (bad path, bad argument).
+could not run (bad path, bad argument). With --fail-on-skip, a run that
+skipped any file (too large, unreadable, binary) also exits 1, so an
+under-scan can't slip through as a clean pass.
 """
 
 from __future__ import annotations
@@ -213,9 +215,16 @@ def _skip_lines_human(skipped) -> list[str]:
     return lines
 
 
-def render_human(findings, skipped, scanned: int) -> str:
+def render_human(findings, skipped, scanned: int, fail_on_skip: bool = False) -> str:
     if not findings:
-        lines = [f"scan_secrets: no credentials found ({scanned} file(s) scanned)"]
+        if fail_on_skip and skipped:
+            lines = [
+                "scan_secrets: no credentials found, but "
+                f"{len(skipped)} path(s) were skipped and --fail-on-skip is set "
+                f"({scanned} file(s) scanned)"
+            ]
+        else:
+            lines = [f"scan_secrets: no credentials found ({scanned} file(s) scanned)"]
     else:
         lines = [f"scan_secrets: {len(findings)} potential credential(s) found:"]
         for f in findings:
@@ -224,10 +233,16 @@ def render_human(findings, skipped, scanned: int) -> str:
     return "\n".join(lines)
 
 
-def render_summary(findings, skipped, scanned: int) -> str:
+def render_summary(findings, skipped, scanned: int, fail_on_skip: bool = False) -> str:
     lines = ["## Secrets scan", ""]
     if not findings:
-        lines.append(f"PASS: no credentials found ({scanned} file(s) scanned)")
+        if fail_on_skip and skipped:
+            lines.append(
+                f"FAIL: no credentials found, but {len(skipped)} path(s) were skipped "
+                f"and --fail-on-skip is set ({scanned} file(s) scanned)"
+            )
+        else:
+            lines.append(f"PASS: no credentials found ({scanned} file(s) scanned)")
     else:
         lines.append(f"FAIL: {len(findings)} potential credential(s) found ({scanned} file(s) scanned)")
         lines.append("")
@@ -247,7 +262,7 @@ def render_summary(findings, skipped, scanned: int) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_json(findings, skipped, scanned: int) -> str:
+def render_json(findings, skipped, scanned: int, fail_on_skip: bool = False) -> str:
     payload = {
         "scanned": scanned,
         "findings": [
@@ -255,6 +270,7 @@ def render_json(findings, skipped, scanned: int) -> str:
             for f in findings
         ],
         "skipped": [{"path": p, "reason": r} for p, r in skipped],
+        "fail_on_skip": fail_on_skip,
     }
     return json.dumps(payload, indent=2)
 
@@ -269,6 +285,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="glob (matched against the relative path) to skip; repeatable")
     p.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES,
                     help=f"skip files larger than this (default: {DEFAULT_MAX_BYTES})")
+    p.add_argument("--fail-on-skip", action="store_true",
+                    help="exit non-zero if any file was skipped (too large, unreadable, "
+                         "binary), so an under-scan can't pass silently")
     out = p.add_mutually_exclusive_group()
     out.add_argument("--json", action="store_true", help="machine-readable JSON output")
     out.add_argument("--summary", action="store_true", help="markdown for GITHUB_STEP_SUMMARY")
@@ -290,14 +309,19 @@ def main(argv=None) -> int:
 
     findings, skipped, scanned = scan(root, args.exclude, args.max_bytes)
 
-    if args.json:
-        print(render_json(findings, skipped, scanned))
-    elif args.summary:
-        print(render_summary(findings, skipped, scanned), end="")
-    elif not (args.quiet and not findings):
-        print(render_human(findings, skipped, scanned))
+    # A skip only fails the run when the caller asked for it; the default
+    # stays "report skips, but only findings fail" so existing callers keep
+    # the exact same exit codes they had.
+    failed = bool(findings) or (args.fail_on_skip and bool(skipped))
 
-    return 1 if findings else 0
+    if args.json:
+        print(render_json(findings, skipped, scanned, args.fail_on_skip))
+    elif args.summary:
+        print(render_summary(findings, skipped, scanned, args.fail_on_skip), end="")
+    elif not (args.quiet and not failed):
+        print(render_human(findings, skipped, scanned, args.fail_on_skip))
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -83,6 +83,41 @@ def test_local_reports_missing_tool_as_fail_not_a_silent_pass(tmp_path, capsys, 
     assert "noslop: FAIL" in out
 
 
+def test_local_fail_on_skip_fails_the_gate_when_a_file_is_skipped(tmp_path, capsys):
+    # An oversized file is skipped by the secrets scan. With --fail-on-skip
+    # the whole gate must go FAIL -- an under-scan can't hide behind a clean
+    # verdict.
+    _init_git_repo(tmp_path, {"big.py": "x" * 200})
+
+    code = cli.main([
+        "--local", "--no-noslop", "--no-zizmor", "--no-skillxray",
+        "--secrets-max-bytes", "50", "--fail-on-skip", str(tmp_path),
+    ])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "secrets: FAIL" in out
+    assert "big.py" in out
+    assert "**ci-safety-gate: FAIL**" in out
+
+
+def test_local_without_fail_on_skip_still_passes_on_a_skip(tmp_path, capsys):
+    # Same skipped file, no flag: the skip is reported in the summary but the
+    # gate still passes, so default behavior is unchanged.
+    _init_git_repo(tmp_path, {"big.py": "x" * 200})
+
+    code = cli.main([
+        "--local", "--no-noslop", "--no-zizmor", "--no-skillxray",
+        "--secrets-max-bytes", "50", str(tmp_path),
+    ])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "secrets: pass" in out
+    assert "big.py" in out
+    assert "**ci-safety-gate: PASS**" in out
+
+
 def test_missing_target_directory_errors_cleanly(tmp_path, capsys):
     missing = tmp_path / "does-not-exist"
     code = cli.main(["--local", str(missing)])

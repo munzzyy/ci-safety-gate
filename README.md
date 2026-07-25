@@ -33,7 +33,10 @@ is at [`examples/workflow.yml`](examples/workflow.yml).
   of that, this step detects it and skips cleanly instead of failing on nothing to scan.
 - **secrets** (bundled, `scan_secrets.py`, no dependency) — greps the working tree for
   AWS access key IDs, GitHub and GitLab tokens, OpenAI/Anthropic/Stripe keys, and PEM
-  private key blocks. Matched values are redacted before they ever hit the log.
+  private key blocks. Matched values are redacted before they ever hit the log. Any file
+  it skips (too large, unreadable, binary) is listed in the summary with the reason, so an
+  under-scan is never silent; set `secrets-fail-on-skip: "true"` to make a skip fail the
+  gate instead of just reporting it.
 
 ## Toggling checks
 

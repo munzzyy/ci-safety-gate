@@ -23,6 +23,18 @@ def test_secrets_argv_flags_match_action_yml():
         assert flag in block
 
 
+def test_secrets_argv_appends_fail_on_skip_and_matches_action_yml():
+    argv = checks.secrets_argv("some/path", 2_000_000, [], fail_on_skip=True)
+    assert argv == ["some/path", "--max-bytes", "2000000", "--summary", "--fail-on-skip"]
+    block = action_defaults.step_block("Secrets scan")
+    assert "--fail-on-skip" in block
+
+
+def test_secrets_argv_omits_fail_on_skip_by_default():
+    argv = checks.secrets_argv("some/path", 2_000_000, [])
+    assert "--fail-on-skip" not in argv
+
+
 def test_noslop_code_argv_flags_match_action_yml():
     argv = checks.noslop_code_argv("7")
     assert argv == ["noslop", "--no-config", "--code", "--threshold", "7"]

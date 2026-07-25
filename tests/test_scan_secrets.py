@@ -411,6 +411,72 @@ def test_human_output_surfaces_skipped_files(tmp_path, capsys):
     assert "too large" in out
 
 
+def test_fail_on_skip_makes_an_oversized_file_fail_the_scan(tmp_path, capsys):
+    # A credential hiding in an oversized file is exactly the fail-open the
+    # flag closes: with --fail-on-skip the skip alone must exit non-zero,
+    # even though no credential was actually read out of the tree.
+    _, secret = CREDENTIALS["openai_key"]
+    padded = ("x" * 200) + secret
+    (tmp_path / "big.py").write_text(padded, encoding="utf-8")
+
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "50", "--fail-on-skip", "--summary"])
+    out = capsys.readouterr().out
+
+    assert code == 1
+    assert "FAIL" in out
+    assert "--fail-on-skip" in out
+    assert "big.py" in out
+    assert "too large" in out
+    assert secret not in out
+
+
+def test_default_does_not_fail_on_a_skip_without_the_flag(tmp_path, capsys):
+    # Same oversized file, no flag: the skip is still reported but the exit
+    # code stays 0, so existing callers see no change in behavior.
+    (tmp_path / "big.py").write_text("x" * 200, encoding="utf-8")
+
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "50", "--summary"])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "PASS" in out
+    assert "big.py" in out
+    assert "too large" in out
+
+
+def test_fail_on_skip_is_a_clean_pass_when_nothing_was_skipped(tmp_path):
+    # The flag only bites when something was actually skipped -- a fully
+    # scanned clean tree still exits 0 with it set.
+    (tmp_path / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    assert scan_secrets.main([str(tmp_path), "--fail-on-skip"]) == 0
+
+
+def test_fail_on_skip_human_output_names_the_flag(tmp_path, capsys):
+    (tmp_path / "big.py").write_text("x" * 100, encoding="utf-8")
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "10", "--fail-on-skip"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "--fail-on-skip" in out
+    assert "big.py" in out
+
+
+def test_fail_on_skip_json_reports_the_flag_state(tmp_path, capsys):
+    (tmp_path / "big.py").write_text("x" * 100, encoding="utf-8")
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "10", "--fail-on-skip", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert payload["fail_on_skip"] is True
+    assert payload["skipped"] == [{"path": "big.py", "reason": "too large"}]
+
+
+def test_json_reports_fail_on_skip_false_by_default(tmp_path, capsys):
+    (tmp_path / "big.py").write_text("x" * 100, encoding="utf-8")
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "10", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["fail_on_skip"] is False
+
+
 def test_bomless_utf16_le_credential_is_scanned_not_skipped(tmp_path):
     # Some Windows tooling writes UTF-16 with no BOM at all. Half the bytes
     # are \x00 by construction, so a raw null-byte check would call it

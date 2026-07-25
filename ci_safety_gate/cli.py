@@ -51,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--secrets-max-bytes", type=int,
                     default=int(_default("secrets-max-bytes", "2000000")),
                     help="skip files larger than this many bytes")
+    p.add_argument("--fail-on-skip", action="store_true",
+                    help="fail the secrets scan if any file was skipped (too large, "
+                         "unreadable, binary) instead of only reporting the skip")
 
     p.add_argument("--no-noslop", action="store_true", help="skip noslop AI-slop detection")
     p.add_argument("--noslop-version", default=_default("noslop-version", "0.10.0"),
@@ -108,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_secrets:
         _, secrets_outcome, secrets_summary = runner.run_secrets(
             root, args.secrets_path, args.secrets_max_bytes, args.secrets_exclude,
+            args.fail_on_skip,
         )
         sections.append(secrets_summary)
 
