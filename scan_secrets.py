@@ -25,11 +25,21 @@ from pathlib import Path
 
 DEFAULT_MAX_BYTES = 2_000_000
 
-# Directory names skipped everywhere, regardless of --exclude.
+# Directory names skipped everywhere, regardless of --exclude. Kept to
+# unambiguous VCS/tool/cache dirs -- a committed secret never belongs in
+# these, and skipping them keeps the scan fast. dist/ and build/ are
+# deliberately NOT here: committed bundles are exactly where a leaked key
+# lands, so they get scanned.
 SKIP_DIRS = {
-    ".git", "node_modules", ".venv", "venv", "env", "__pycache__",
-    "dist", "build", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
+    ".git", "node_modules", "__pycache__",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
 }
+
+# Names that get skipped only when the directory actually looks like a
+# Python virtualenv. A real venv holds no committed secrets worth reading;
+# a project directory that merely happens to be named "env" (a common
+# non-virtualenv config dir) must still be scanned.
+VENV_DIR_NAMES = {".venv", "venv", "env"}
 
 # (rule name, compiled pattern). Kept small and specific so false positives
 # stay rare, since a noisy scanner trains people to ignore it.
@@ -81,22 +91,60 @@ def is_utf16_bom(data: bytes) -> bool:
     return data[:2] in _UTF16_BOMS
 
 
-def is_binary(data: bytes) -> bool:
+def detect_utf16(data: bytes) -> str | None:
+    """Return the codec to decode data with if it looks like UTF-16 text,
+    else None.
+
+    A BOM is the definitive signal. Without one, ASCII-range UTF-16 still
+    gives itself away: every character's 0x00 byte lands at a consistent
+    offset parity -- odd for little-endian, even for big-endian. Some
+    Windows tooling writes UTF-16 with no BOM at all, so a raw null-byte
+    check alone would wrongly call it binary and skip it.
+    """
     if is_utf16_bom(data):
+        return "utf-16"  # codec auto-detects LE/BE from the BOM and strips it
+    sample = data[:8192]
+    pairs = len(sample) // 2
+    if pairs < 8:
+        return None
+    odd_nulls = sample[1::2].count(0)
+    even_nulls = sample[0::2].count(0)
+    if odd_nulls >= pairs * 0.9 and even_nulls == 0:
+        return "utf-16-le"
+    if even_nulls >= pairs * 0.9 and odd_nulls == 0:
+        return "utf-16-be"
+    return None
+
+
+def is_binary(data: bytes) -> bool:
+    if detect_utf16(data) is not None:
         return False
     return b"\x00" in data[:8192]
+
+
+def _is_virtualenv(path: Path) -> bool:
+    return (path / "pyvenv.cfg").exists() or (path / "bin" / "activate").exists()
 
 
 def is_excluded(rel_posix: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(rel_posix, pat) for pat in patterns)
 
 
-def iter_candidate_files(root: Path, excludes: list[str]):
+def iter_candidate_files(root: Path, excludes: list[str], pruned: list | None = None):
     if root.is_file():
         yield root
         return
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        kept = []
+        for d in dirnames:
+            full = Path(dirpath) / d
+            if d in SKIP_DIRS or (d in VENV_DIR_NAMES and _is_virtualenv(full)):
+                if pruned is not None:
+                    rel = Path(os.path.relpath(full, start=root)).as_posix()
+                    pruned.append((rel + "/", "default-skip dir"))
+                continue
+            kept.append(d)
+        dirnames[:] = kept
         for name in filenames:
             fp = Path(dirpath) / name
             if fp.is_symlink():
@@ -123,10 +171,10 @@ def scan_file(fp: Path, rel_label: str, max_bytes: int):
     if is_binary(data):
         return [], "binary"
 
-    # The "utf-16" codec auto-detects LE vs BE from the BOM and strips it,
-    # so the credential regexes see the same plain text either encoding
-    # produces.
-    text = data.decode("utf-16" if is_utf16_bom(data) else "utf-8", errors="replace")
+    # Decode UTF-16 (BOM or BOM-less) with the right codec so the credential
+    # regexes see plain text rather than null-interleaved bytes; everything
+    # else is treated as UTF-8.
+    text = data.decode(detect_utf16(data) or "utf-8", errors="replace")
     offsets = _newline_offsets(text)
     findings = []
     for rule, pattern in PATTERNS:
@@ -145,7 +193,7 @@ def scan(root: Path, excludes: list[str], max_bytes: int):
     skipped: list[tuple[str, str]] = []
     scanned = 0
     is_single_file = root.is_file()
-    for fp in iter_candidate_files(root, excludes):
+    for fp in iter_candidate_files(root, excludes, pruned=skipped):
         rel_label = fp.name if is_single_file else Path(os.path.relpath(fp, start=root)).as_posix()
         file_findings, reason = scan_file(fp, rel_label, max_bytes)
         if reason is not None:
@@ -156,26 +204,46 @@ def scan(root: Path, excludes: list[str], max_bytes: int):
     return findings, skipped, scanned
 
 
-def render_human(findings, scanned: int) -> str:
+def _skip_lines_human(skipped) -> list[str]:
+    if not skipped:
+        return []
+    lines = [f"  {len(skipped)} path(s) not scanned:"]
+    for path, reason in skipped:
+        lines.append(f"    {path}: {reason}")
+    return lines
+
+
+def render_human(findings, skipped, scanned: int) -> str:
     if not findings:
-        return f"scan_secrets: no credentials found ({scanned} file(s) scanned)"
-    lines = [f"scan_secrets: {len(findings)} potential credential(s) found:"]
-    for f in findings:
-        lines.append(f"  {f.path}:{f.line}: {f.rule} ({f.redacted})")
+        lines = [f"scan_secrets: no credentials found ({scanned} file(s) scanned)"]
+    else:
+        lines = [f"scan_secrets: {len(findings)} potential credential(s) found:"]
+        for f in findings:
+            lines.append(f"  {f.path}:{f.line}: {f.rule} ({f.redacted})")
+    lines.extend(_skip_lines_human(skipped))
     return "\n".join(lines)
 
 
-def render_summary(findings, scanned: int) -> str:
+def render_summary(findings, skipped, scanned: int) -> str:
     lines = ["## Secrets scan", ""]
     if not findings:
         lines.append(f"PASS: no credentials found ({scanned} file(s) scanned)")
-        return "\n".join(lines) + "\n"
-    lines.append(f"FAIL: {len(findings)} potential credential(s) found ({scanned} file(s) scanned)")
-    lines.append("")
-    lines.append("| file | line | type | value |")
-    lines.append("|---|---|---|---|")
-    for f in findings:
-        lines.append(f"| `{f.path}` | {f.line} | {f.rule} | `{f.redacted}` |")
+    else:
+        lines.append(f"FAIL: {len(findings)} potential credential(s) found ({scanned} file(s) scanned)")
+        lines.append("")
+        lines.append("| file | line | type | value |")
+        lines.append("|---|---|---|---|")
+        for f in findings:
+            lines.append(f"| `{f.path}` | {f.line} | {f.rule} | `{f.redacted}` |")
+    if skipped:
+        # An under-scan must never be silent -- surface every path that was
+        # not read (too large, binary, or a default-skip dir) and why, so a
+        # credential hiding in one of them can't produce a clean-looking PASS
+        # with no trace in the mode the action actually runs.
+        lines.append("")
+        lines.append(f"Skipped (not scanned): {len(skipped)} path(s)")
+        for path, reason in skipped:
+            lines.append(f"- `{path}`: {reason}")
     return "\n".join(lines) + "\n"
 
 
@@ -225,9 +293,9 @@ def main(argv=None) -> int:
     if args.json:
         print(render_json(findings, skipped, scanned))
     elif args.summary:
-        print(render_summary(findings, scanned), end="")
+        print(render_summary(findings, skipped, scanned), end="")
     elif not (args.quiet and not findings):
-        print(render_human(findings, scanned))
+        print(render_human(findings, skipped, scanned))
 
     return 1 if findings else 0
 

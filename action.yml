@@ -235,9 +235,16 @@ runs:
       run: |
         target="${INPUTS_SKILLXRAY_PATH}"
         if [ -z "$target" ]; then
-          if find "${{ github.workspace }}" -maxdepth 6 \
+          # -L (follow symlinks) so a symlinked SKILL.md / skills/ / .claude
+          # is caught, matching the Python port (os.walk lists symlinked
+          # markers). Plain -type keeps this portable to BSD/macOS find,
+          # which lacks the GNU-only referent-type primary: with -L, -type
+          # reports the referent's type, so a symlink-to-file SKILL.md is
+          # -type f while a directory named SKILL.md is -type d and correctly
+          # excluded.
+          if find -L "${{ github.workspace }}" -maxdepth 6 \
                \( -path '*/.git' -o -path '*/node_modules' \) -prune -o \
-               \( -name 'SKILL.md' -o -type d -name 'skills' -o -type d -name '.claude' \) -print \
+               \( -type f -name 'SKILL.md' -o -type d -name 'skills' -o -type d -name '.claude' \) -print \
                2>/dev/null | grep -q .; then
             target="${{ github.workspace }}"
           fi

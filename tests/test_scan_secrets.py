@@ -382,6 +382,106 @@ def test_json_output_includes_skipped_files(tmp_path, capsys):
     assert payload["skipped"] == [{"path": "big.txt", "reason": "too large"}]
 
 
+def test_summary_surfaces_skipped_files_so_underscan_is_not_silent(tmp_path, capsys):
+    # A credential hiding in an oversized file must not produce a bare
+    # "PASS" with no trace: --summary is the mode the action runs, and the
+    # skip has to be visible there, not only in --json.
+    _, secret = CREDENTIALS["aws_access_key"]
+    padded = ("x" * 200) + secret
+    (tmp_path / "big.py").write_text(padded, encoding="utf-8")
+    (tmp_path / "ok.py").write_text("print('hi')\n", encoding="utf-8")
+
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "50", "--summary"])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "Skipped (not scanned)" in out
+    assert "big.py" in out
+    assert "too large" in out
+    assert secret not in out
+
+
+def test_human_output_surfaces_skipped_files(tmp_path, capsys):
+    (tmp_path / "big.py").write_text("x" * 100, encoding="utf-8")
+    code = scan_secrets.main([str(tmp_path), "--max-bytes", "10"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "not scanned" in out
+    assert "big.py" in out
+    assert "too large" in out
+
+
+def test_bomless_utf16_le_credential_is_scanned_not_skipped(tmp_path):
+    # Some Windows tooling writes UTF-16 with no BOM at all. Half the bytes
+    # are \x00 by construction, so a raw null-byte check would call it
+    # binary and skip the credential silently. The offset-parity heuristic
+    # has to catch it.
+    _, secret = CREDENTIALS["aws_access_key"]
+    content = f'AWS_ACCESS_KEY_ID = "{secret}"\n'
+    (tmp_path / "secret.env").write_bytes(content.encode("utf-16-le"))
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert scanned == 1
+    assert skipped == []
+    assert len(findings) == 1
+    assert findings[0].rule == "AWS access key ID"
+
+
+def test_bomless_utf16_be_credential_is_scanned_not_skipped(tmp_path):
+    _, secret = CREDENTIALS["github_classic"]
+    content = f'token = "{secret}"\n'
+    (tmp_path / "secret.env").write_bytes(content.encode("utf-16-be"))
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert scanned == 1
+    assert skipped == []
+    assert len(findings) == 1
+    assert findings[0].rule == "GitHub token"
+
+
+def test_dist_build_env_dirs_are_scanned_not_pruned(tmp_path):
+    # Committed dist/build bundles and a non-virtualenv config dir named
+    # env/ are exactly where a leaked key lands; they must be scanned, not
+    # pruned as if they were tool caches.
+    _, secret = CREDENTIALS["aws_access_key"]
+    for sub in ("env", "dist", "build"):
+        d = tmp_path / sub
+        d.mkdir()
+        (d / "config.txt").write_text(f'k = "{secret}"\n', encoding="utf-8")
+    (tmp_path / "main.py").write_text("print('main')\n", encoding="utf-8")
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    found_paths = {f.path for f in findings}
+    assert found_paths == {"env/config.txt", "dist/config.txt", "build/config.txt"}
+    assert scanned == 4
+
+
+def test_real_virtualenv_named_env_is_pruned_and_listed_as_skipped(tmp_path):
+    # A directory named env/ that actually looks like a virtualenv still
+    # gets skipped -- but the skip is recorded so it isn't invisible.
+    venv = tmp_path / "env"
+    venv.mkdir()
+    (venv / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+    _, secret = CREDENTIALS["aws_access_key"]
+    (venv / "leak.py").write_text(f'k = "{secret}"\n', encoding="utf-8")
+    (tmp_path / "main.py").write_text("print('main')\n", encoding="utf-8")
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert findings == []
+    assert scanned == 1
+    assert ("env/", "default-skip dir") in skipped
+
+
+def test_default_skip_dir_is_listed_in_skipped(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("noise\n", encoding="utf-8")
+    (tmp_path / "app.py").write_text("print('hi')\n", encoding="utf-8")
+
+    findings, skipped, scanned = scan_secrets.scan(tmp_path, [], scan_secrets.DEFAULT_MAX_BYTES)
+    assert scanned == 1
+    assert (".git/", "default-skip dir") in skipped
+
+
 def test_no_eval_or_exec_used_in_module_source():
     with open(scan_secrets.__file__, encoding="utf-8") as fh:
         source = fh.read()

@@ -13,10 +13,29 @@ gate bug, not a convenience.
 from __future__ import annotations
 
 import importlib.util
+import os
+import shlex
 import shutil
 import subprocess
 
-from ci_safety_gate import runner
+import pytest
+
+from ci_safety_gate import action_defaults, runner
+
+
+def _action_yml_find_hits(root) -> bool:
+    """Run the exact find pipeline action.yml's "Detect skill-shaped
+    content" step uses, so the port can be checked against real find rather
+    than a paraphrase of it. test_detect_find_pipeline_matches_action_yml
+    guards the hardcoded predicate below against drift from action.yml."""
+    cmd = (
+        f"find -L {shlex.quote(str(root))} -maxdepth 6 "
+        r"\( -path '*/.git' -o -path '*/node_modules' \) -prune -o "
+        r"\( -type f -name 'SKILL.md' -o -type d -name 'skills' "
+        r"-o -type d -name '.claude' \) -print "
+        "2>/dev/null | grep -q ."
+    )
+    return subprocess.run(["bash", "-c", cmd]).returncode == 0
 
 
 def _init_git_repo(root, files: dict[str, str]) -> None:
@@ -83,6 +102,63 @@ def test_detect_respects_max_depth(tmp_path):
 
 def test_detect_on_missing_root_returns_empty(tmp_path):
     assert runner.detect_skillxray_target(tmp_path / "does-not-exist") == ""
+
+
+def test_detect_find_pipeline_matches_action_yml():
+    # The find predicate _action_yml_find_hits hardcodes must still be the
+    # one action.yml actually runs, so the parity fixtures below compare the
+    # port against real semantics -- not a stale copy.
+    block = action_defaults.step_block("Detect skill-shaped content")
+    for token in (
+        "find -L ",
+        "-type f -name 'SKILL.md'",
+        "-type d -name 'skills'",
+        "-type d -name '.claude'",
+    ):
+        assert token in block
+    # -xtype is a GNU-only primary that errors out on BSD/macOS find (and,
+    # combined with -type f, missed a symlinked SKILL.md). It must be gone.
+    assert "-xtype" not in block
+
+
+def test_detect_symlinked_skills_dir_is_a_hit_in_both_engines(tmp_path):
+    # A repo whose skills/ is a symlink to a real dir must still be
+    # detected -- and the CI find and the local port must agree, or a
+    # symlinked skill tree gets scanned in one mode and clean-skipped in
+    # the other.
+    (tmp_path / "realskills").mkdir()
+    try:
+        os.symlink("realskills", tmp_path / "skills")
+    except (OSError, NotImplementedError):
+        pytest.skip("platform does not allow creating symlinks without elevated privilege")
+
+    assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
+    assert _action_yml_find_hits(tmp_path) is True
+
+
+def test_detect_symlinked_skill_md_is_a_hit_in_both_engines(tmp_path):
+    # A repo whose only skill marker is a SKILL.md symlinked to a real file
+    # must be detected by both engines. The old CI predicate `-type f`
+    # tested the symlink's own type (l, not f) and missed it, so CI left the
+    # target empty and skipped skillxray entirely -- a fail-OPEN divergence
+    # from the port, which finds the symlink in os.walk's filenames.
+    (tmp_path / "actual.md").write_text("# skill\n")
+    try:
+        os.symlink("actual.md", tmp_path / "SKILL.md")
+    except (OSError, NotImplementedError):
+        pytest.skip("platform does not allow creating symlinks without elevated privilege")
+
+    assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
+    assert _action_yml_find_hits(tmp_path) is True
+
+
+def test_detect_directory_named_skill_md_is_not_a_hit_in_both_engines(tmp_path):
+    # A directory literally named SKILL.md is not a skill file; neither
+    # engine should treat it as a hit.
+    (tmp_path / "SKILL.md" / "nested").mkdir(parents=True)
+
+    assert runner.detect_skillxray_target(tmp_path) == ""
+    assert _action_yml_find_hits(tmp_path) is False
 
 
 # ---------------------------------------------------------------------------
