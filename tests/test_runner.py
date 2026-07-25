@@ -121,6 +121,10 @@ def test_detect_find_pipeline_matches_action_yml():
     assert "-xtype" not in block
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="_action_yml_find_hits runs a POSIX find pipeline; the action runs on Linux runners",
+)
 def test_detect_symlinked_skills_dir_is_a_hit_in_both_engines(tmp_path):
     # A repo whose skills/ is a symlink to a real dir must still be
     # detected -- and the CI find and the local port must agree, or a
@@ -136,6 +140,10 @@ def test_detect_symlinked_skills_dir_is_a_hit_in_both_engines(tmp_path):
     assert _action_yml_find_hits(tmp_path) is True
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="_action_yml_find_hits runs a POSIX find pipeline; the action runs on Linux runners",
+)
 def test_detect_symlinked_skill_md_is_a_hit_in_both_engines(tmp_path):
     # A repo whose only skill marker is a SKILL.md symlinked to a real file
     # must be detected by both engines. The old CI predicate `-type f`
