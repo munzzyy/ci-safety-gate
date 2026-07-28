@@ -1,7 +1,7 @@
 # Security
 
-ci-safety-gate is a composite GitHub Action that runs four scanners (noslop,
-zizmor, skillxray, and a bundled secrets grep) inside your CI job and combines
+ci-safety-gate is a composite GitHub Action that runs three scanners (zizmor,
+skillxray, and a bundled secrets grep) inside your CI job and combines
 their verdicts into one gate. It runs with whatever permissions your workflow
 gives the job - the recommended setup is `contents: read` and nothing else,
 and nothing in the gate needs more.

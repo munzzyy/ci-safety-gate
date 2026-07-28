@@ -4,7 +4,7 @@ These exercise the full path: runner.py's checks feed straight into the
 real evaluate_gate.evaluate()/render_summary() -- the same functions
 action.yml's "Evaluate gate" step calls -- so a green test here is proof
 the local CLI is reusing the verdict logic, not re-deriving its own.
-noslop/zizmor/skillxray are disabled in most of these so the suite runs
+zizmor/skillxray are disabled in most of these so the suite runs
 the same whether or not those tools happen to be installed on the machine
 running pytest; the missing-tool behavior itself is covered directly in
 test_runner.py.
@@ -34,7 +34,7 @@ def _init_git_repo(root, files: dict[str, str]) -> None:
 def test_local_passes_on_a_clean_fixture(tmp_path, capsys):
     _init_git_repo(tmp_path, {"app.py": "def greet(name):\n    return f'hi {name}'\n"})
 
-    code = cli.main(["--local", "--no-noslop", "--no-zizmor", "--no-skillxray", str(tmp_path)])
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", str(tmp_path)])
 
     out = capsys.readouterr().out
     assert code == 0
@@ -48,7 +48,7 @@ def test_local_fails_on_a_planted_credential(tmp_path, capsys):
     token = "ghp_" + "1" * 36
     _init_git_repo(tmp_path, {"leak.py": f"TOKEN = {token!r}\n"})
 
-    code = cli.main(["--local", "--no-noslop", "--no-zizmor", "--no-skillxray", str(tmp_path)])
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", str(tmp_path)])
 
     out = capsys.readouterr().out
     assert code == 1
@@ -59,28 +59,27 @@ def test_local_fails_on_a_planted_credential(tmp_path, capsys):
 def test_local_disabled_checks_render_as_skipped_not_pass(tmp_path, capsys):
     _init_git_repo(tmp_path, {"app.py": "print('hi')\n"})
 
-    code = cli.main(["--local", "--no-noslop", "--no-zizmor", "--no-skillxray", str(tmp_path)])
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", str(tmp_path)])
 
     out = capsys.readouterr().out
     assert code == 0
-    assert "noslop: skipped (disabled)" in out
     assert "zizmor: skipped (disabled)" in out
     assert "skillxray: skipped (disabled)" in out
 
 
 def test_local_reports_missing_tool_as_fail_not_a_silent_pass(tmp_path, capsys, monkeypatch):
     # No planted secrets and no SKILL.md -- the only reason this should
-    # fail is noslop being unavailable, which must never read as a pass.
+    # fail is zizmor being unavailable, which must never read as a pass.
     _init_git_repo(tmp_path, {"app.py": "print('hi')\n"})
     real_which = shutil.which
-    monkeypatch.setattr(shutil, "which", lambda name: None if name == "noslop" else real_which(name))
+    monkeypatch.setattr(shutil, "which", lambda name: None if name == "zizmor" else real_which(name))
 
-    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", str(tmp_path)])
+    code = cli.main(["--local", "--no-skillxray", str(tmp_path)])
 
     out = capsys.readouterr().out
     assert code == 1
     assert "did not run (not installed)" in out
-    assert "noslop: FAIL" in out
+    assert "zizmor: FAIL" in out
 
 
 def test_local_fail_on_skip_fails_the_gate_when_a_file_is_skipped(tmp_path, capsys):
@@ -90,7 +89,7 @@ def test_local_fail_on_skip_fails_the_gate_when_a_file_is_skipped(tmp_path, caps
     _init_git_repo(tmp_path, {"big.py": "x" * 200})
 
     code = cli.main([
-        "--local", "--no-noslop", "--no-zizmor", "--no-skillxray",
+        "--local", "--no-zizmor", "--no-skillxray",
         "--secrets-max-bytes", "50", "--fail-on-skip", str(tmp_path),
     ])
 
@@ -107,7 +106,7 @@ def test_local_without_fail_on_skip_still_passes_on_a_skip(tmp_path, capsys):
     _init_git_repo(tmp_path, {"big.py": "x" * 200})
 
     code = cli.main([
-        "--local", "--no-noslop", "--no-zizmor", "--no-skillxray",
+        "--local", "--no-zizmor", "--no-skillxray",
         "--secrets-max-bytes", "50", str(tmp_path),
     ])
 

@@ -58,30 +58,6 @@ def _pip_install(pip_args: list[str]) -> bool:
     return result.returncode == 0
 
 
-def _git_ls_files(root: Path, globs: str) -> tuple[list[str], str]:
-    """Mirror `git -C root ls-files -z -- <globs>`: only tracked files
-    matching the pathspecs, same as action.yml's noslop step. Returns
-    (files, note) -- note is non-empty if root isn't a git checkout (or
-    git isn't on PATH), in which case files is always [] and this reads
-    the same as "nothing matched" to the caller, exactly like xargs -0r
-    with no input; the note still surfaces the real reason in the summary
-    rather than staying silent about it."""
-    patterns = globs.split()
-    if not patterns:
-        return [], ""
-    if shutil.which("git") is None:
-        return [], "note: git is not on PATH, so no files could be matched"
-    proc = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z", "--", *patterns],
-        capture_output=True,
-    )
-    if proc.returncode != 0:
-        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
-        return [], f"note: git ls-files failed ({stderr or 'not a git checkout?'})"
-    raw = proc.stdout.split(b"\x00")
-    return [p.decode("utf-8", errors="replace") for p in raw if p], ""
-
-
 def run_secrets(root: Path, path: str, max_bytes: int, excludes: list[str],
                 fail_on_skip: bool = False) -> tuple[None, str, str]:
     """secrets is stdlib-only -- no install step, install_outcome is
@@ -95,57 +71,6 @@ def run_secrets(root: Path, path: str, max_bytes: int, excludes: list[str],
     # scan", so its stdout *is* the section -- no extra wrapping needed.
     summary = proc.stdout if proc.stdout.strip() else "## Secrets scan\n\n(no output)\n"
     return None, _outcome_from_returncode(proc.returncode), summary
-
-
-def run_noslop(
-    root: Path,
-    code_globs: str,
-    docs_globs: str,
-    threshold: str,
-    noslop_version: str,
-    install_missing: bool,
-) -> tuple[str, str, str]:
-    heading = "noslop (AI-slop detection)"
-    if shutil.which("noslop") is None:
-        install_outcome = "failure"
-        if install_missing:
-            ok = _pip_install([f"noslop-lint=={noslop_version}"])
-            install_outcome = "success" if ok and shutil.which("noslop") else "failure"
-        if install_outcome != "success":
-            return install_outcome, "skipped", _not_installed_section(
-                heading, "noslop", f"pip install noslop-lint=={noslop_version}"
-            )
-    else:
-        install_outcome = "success"
-
-    out_parts: list[str] = []
-    code_files, code_note = _git_ls_files(root, code_globs)
-    docs_files, docs_note = _git_ls_files(root, docs_globs)
-    for note in (code_note, docs_note):
-        if note:
-            out_parts.append(note)
-
-    code_rc = 0
-    if code_files:
-        proc = subprocess.run(
-            [*checks.noslop_code_argv(threshold), *code_files],
-            cwd=str(root), capture_output=True, text=True,
-        )
-        out_parts.append(proc.stdout + proc.stderr)
-        code_rc = proc.returncode
-
-    docs_rc = 0
-    if docs_files:
-        proc = subprocess.run(
-            [*checks.noslop_docs_argv(threshold), *docs_files],
-            cwd=str(root), capture_output=True, text=True,
-        )
-        out_parts.append(proc.stdout + proc.stderr)
-        docs_rc = proc.returncode
-
-    summary = _fenced_section(heading, "\n".join(p for p in out_parts if p))
-    scan_outcome = "success" if code_rc == 0 and docs_rc == 0 else "failure"
-    return install_outcome, scan_outcome, summary
 
 
 def run_zizmor(

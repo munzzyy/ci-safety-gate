@@ -2,10 +2,9 @@
 and asserted against action.yml's real bash by tests/test_checks.py.
 
 These functions return the tool's own argv (the binary name plus flags,
-not the file list), since noslop and zizmor take file/dir arguments after
-their flags and runner.py appends those once it knows which files git
-tracks. Keeping "which flags" separate from "which files" is what lets the
-parity test check flags without needing a working git checkout.
+not the file list), since zizmor takes its path argument after the flags.
+Keeping "which flags" separate from "which files" is what lets the parity
+test check flags without needing a working git checkout.
 """
 
 from __future__ import annotations
@@ -23,22 +22,6 @@ def secrets_argv(path: str, max_bytes: int, excludes: list[str],
         argv += ["--exclude", pattern]
     if fail_on_skip:
         argv.append("--fail-on-skip")
-    return argv
-
-
-def noslop_code_argv(threshold: str) -> list[str]:
-    """Matches action.yml's noslop step's first invocation (--code)."""
-    argv = ["noslop", "--no-config", "--code"]
-    if threshold:
-        argv += ["--threshold", threshold]
-    return argv
-
-
-def noslop_docs_argv(threshold: str) -> list[str]:
-    """Matches action.yml's noslop step's second invocation (--markdown)."""
-    argv = ["noslop", "--no-config", "--markdown"]
-    if threshold:
-        argv += ["--threshold", threshold]
     return argv
 
 

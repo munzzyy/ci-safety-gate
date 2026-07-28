@@ -23,8 +23,6 @@ is at [`examples/workflow.yml`](examples/workflow.yml).
 
 ## What each check does
 
-- **noslop** (`noslop-lint` on PyPI) — flags AI-written-code and AI-slop tells. Runs code
-  mode over your source and prose mode over your docs.
 - **zizmor** — audits `.github/workflows` and any `action.yml` for GitHub Actions
   vulnerabilities: template injection, unpinned third-party actions, missing
   `persist-credentials: false`, and the like.
@@ -47,13 +45,11 @@ Every check is its own input, `"true"` by default:
   with:
     skillxray: "false"    # skip if you know you have no skill/plugin content
     zizmor-min-severity: "high"
-    noslop-code-globs: "*.py *.ts"
     secrets-exclude: "tests/fixtures/*"
 ```
 
 Full input list is in [`action.yml`](action.yml): paths and globs per check, a fail
-threshold for skillxray and zizmor, a score threshold for noslop, and a size cap for the
-secrets scan.
+threshold for skillxray and zizmor, and a size cap for the secrets scan.
 
 ## The combined summary
 
@@ -63,8 +59,8 @@ skipped per check and the overall verdict. The job step itself fails if any enab
 failed; a skipped check (disabled, or skillxray finding nothing to scan) never fails it.
 
 The gate runs live on [munzzyy/munzzyy](https://github.com/munzzyy/munzzyy/actions/workflows/gate.yml):
-noslop and the secrets scan over the repo, zizmor over its workflow, and skillxray skipping
-cleanly because there's nothing skill-shaped to scan.
+the secrets scan over the repo, zizmor over its workflow, and skillxray skipping cleanly
+because there's nothing skill-shaped to scan.
 
 ## Running the gate locally
 
@@ -82,13 +78,13 @@ ci-safety-gate --local
 
 (or, from inside this checkout with no install at all: `python -m ci_safety_gate --local`.)
 
-`--local` runs the same commands action.yml's composite steps run — noslop and zizmor over
-your tracked files, skillxray if it finds `SKILL.md` / `skills/` / `.claude`, the bundled
+`--local` runs the same commands action.yml's composite steps run — zizmor over your
+tracked files, skillxray if it finds `SKILL.md` / `skills/` / `.claude`, the bundled
 secrets scan — against a directory you point it at (default `.`), hands the result to the
 same `evaluate_gate.py` the action itself calls, and prints the same combined summary to your
 terminal instead of `$GITHUB_STEP_SUMMARY`. Same verdict, same exit code.
 
-Every `action.yml` input has a matching flag — `--no-noslop`, `--zizmor-min-severity`,
+Every `action.yml` input has a matching flag — `--no-zizmor`, `--zizmor-min-severity`,
 `--secrets-exclude`, and so on. Run `ci-safety-gate --help` for the full list. Defaults come
 straight out of `action.yml` at run time rather than a hand-copied second set, so a version
 bump or threshold change there shows up here for free.
@@ -118,15 +114,15 @@ run (same pins, same skillxray git ref) instead of just naming the command.
   gap for good, but that's a bigger, riskier change than this pass makes.
   `tests/test_checks.py` asserts every flag `checks.py` builds is still literally present in
   `action.yml`'s own bash, so the two failing to match is a test failure, not a silent drift.
-- `--local` uses whatever Python, noslop, zizmor, and skillxray are already on your `PATH`
+- `--local` uses whatever Python, zizmor, and skillxray are already on your `PATH`
   (or installs them with `--install-missing`); it doesn't manage a separate pinned
   `python-version` the way the composite action does.
 
 ## What this does not do
 
-- It's an orchestrator, not a detector. The actual detection quality is whatever noslop,
-  zizmor, and skillxray ship; this action just installs them, runs them the same way every
-  time, and merges the output. A finding a bundled tool misses, this gate misses too.
+- It's an orchestrator, not a detector. The actual detection quality is whatever zizmor
+  and skillxray ship; this action just installs them, runs them the same way every time,
+  and merges the output. A finding a bundled tool misses, this gate misses too.
 - skillxray installs from a pinned git tag (`git+https://github.com/munzzyy/skillxray@v0.1.1`),
   not from PyPI, because it isn't published there yet. Point `skillxray-ref` at a newer tag
   once one exists, or drop this once it's on PyPI.

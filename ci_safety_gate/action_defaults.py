@@ -3,7 +3,7 @@
 evaluate_gate.py is already the one place the verdict logic lives; this
 module gives `--local` the same discipline for the *other* thing that must
 not fork into a second, driftable copy -- which checks run, with which
-flags, at which defaults. Rather than hardcoding "noslop-lint==0.10.0" (or
+flags, at which defaults. Rather than hardcoding "zizmor-min-severity" (or
 any other default) a second time in this package, every default a check
 function needs is parsed out of the real action.yml at import time, so a
 version bump or a threshold change in action.yml is picked up here for
@@ -97,7 +97,7 @@ def input_defaults() -> dict[str, str]:
 
 
 def default(name: str) -> str:
-    """One input's default value, e.g. default("noslop-version") == "0.10.0"."""
+    """One input's default value, e.g. default("zizmor-min-severity") == "medium"."""
     try:
         return input_defaults()[name]
     except KeyError:

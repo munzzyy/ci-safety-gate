@@ -19,9 +19,6 @@ def test_reads_known_input_defaults():
     # cli.py's own defaults come from this same function, so a real drift
     # would otherwise only show up as --local quietly using a stale value.
     defaults = action_defaults.input_defaults()
-    assert defaults["noslop-version"] == "0.10.0"
-    assert defaults["noslop-code-globs"] == "*.py *.js *.jsx *.ts *.tsx *.go *.rs *.sh *.rb"
-    assert defaults["noslop-docs-globs"] == "*.md"
     assert defaults["zizmor-min-severity"] == "medium"
     assert defaults["zizmor-offline"] == "true"
     assert defaults["skillxray-ref"] == "v0.1.1"
@@ -40,6 +37,6 @@ def test_default_raises_a_clear_error_for_an_unknown_input():
 
 def test_step_blocks_cover_every_named_step():
     blocks = action_defaults.step_blocks()
-    for name in ("Secrets scan", "noslop", "zizmor", "skillxray", "Evaluate gate"):
+    for name in ("Secrets scan", "zizmor", "skillxray", "Evaluate gate"):
         assert name in blocks
         assert blocks[name].strip() != ""

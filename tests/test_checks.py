@@ -35,22 +35,6 @@ def test_secrets_argv_omits_fail_on_skip_by_default():
     assert "--fail-on-skip" not in argv
 
 
-def test_noslop_code_argv_flags_match_action_yml():
-    argv = checks.noslop_code_argv("7")
-    assert argv == ["noslop", "--no-config", "--code", "--threshold", "7"]
-    block = action_defaults.step_block("noslop")
-    for flag in ("--no-config", "--code", "--threshold"):
-        assert flag in block
-
-
-def test_noslop_docs_argv_flags_match_action_yml():
-    argv = checks.noslop_docs_argv("")
-    assert argv == ["noslop", "--no-config", "--markdown"]
-    block = action_defaults.step_block("noslop")
-    for flag in ("--no-config", "--markdown"):
-        assert flag in block
-
-
 def test_zizmor_argv_flags_match_action_yml():
     argv = checks.zizmor_argv(".", "high", True)
     assert argv == ["zizmor", "--no-progress", "--color", "never", "--offline",

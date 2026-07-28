@@ -38,12 +38,6 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
-      - name: Install noslop
-        run: python -m pip install --quiet noslop-lint==0.10.0
-      - name: noslop over this repo's own code
-        run: git ls-files -z -- '*.py' | xargs -0r noslop --no-config
-      - name: noslop over this repo's own docs
-        run: git ls-files -z -- '*.md' | xargs -0r noslop --no-config --markdown
       - name: Install zizmor
         run: python -m pip install --quiet zizmor
       - name: zizmor over this repo's own action and workflows
@@ -61,10 +55,6 @@ jobs:
 
       # Verify the exact commands action.yml runs actually work, not just that the
       # YAML parses. This is the part a `uses: ./` invocation alone wouldn't prove.
-      - name: Install noslop the way action.yml does
-        run: python -m pip install --quiet noslop-lint==0.10.0
-      - name: Run noslop the way action.yml does, against the clean example
-        run: git ls-files -z -- examples/demo/*.py | xargs -0r noslop --no-config --code
       - name: Run scan_secrets.py the way action.yml does, against the clean example
         run: python3 scan_secrets.py examples/demo --summary
 
@@ -87,7 +77,6 @@ jobs:
         id: auto_skip
         uses: ./
         with:
-          noslop: "false"
           zizmor: "false"
           secrets: "false"
           skillxray: "true"
@@ -102,7 +91,6 @@ jobs:
         continue-on-error: true
         uses: ./
         with:
-          noslop: "false"
           zizmor: "false"
           skillxray: "false"
           secrets: "true"

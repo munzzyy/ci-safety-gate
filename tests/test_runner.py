@@ -3,7 +3,7 @@
 detect_skillxray_target gets checked against action.yml's real find
 pipeline (prune .git/node_modules, respect max_depth, target the whole
 root on any hit). The rest of this file protects the missing-tool path:
-run_noslop/run_zizmor/run_skillxray must all report install_outcome
+run_zizmor/run_skillxray must both report install_outcome
 "failure" with a scan_outcome that evaluate_gate.decide_check turns into
 FAIL, and a summary naming the exact install command -- a scanner that
 silently skips because it isn't installed and still reports clean is a
@@ -36,19 +36,6 @@ def _action_yml_find_hits(root) -> bool:
         "2>/dev/null | grep -q ."
     )
     return subprocess.run(["bash", "-c", cmd]).returncode == 0
-
-
-def _init_git_repo(root, files: dict[str, str]) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    for rel, content in files.items():
-        path = root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=root, check=True)
 
 
 # ---------------------------------------------------------------------------
@@ -170,51 +157,8 @@ def test_detect_directory_named_skill_md_is_not_a_hit_in_both_engines(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _git_ls_files
-# ---------------------------------------------------------------------------
-
-def test_git_ls_files_matches_only_tracked_globbed_files(tmp_path):
-    _init_git_repo(tmp_path, {
-        "a.py": "print('a')\n",
-        "b.md": "# doc\n",
-        "sub/c.py": "print('c')\n",
-    })
-    (tmp_path / "untracked.py").write_text("print('untracked')\n")
-
-    files, note = runner._git_ls_files(tmp_path, "*.py")
-    assert note == ""
-    assert sorted(files) == ["a.py", "sub/c.py"]
-
-
-def test_git_ls_files_on_non_git_dir_returns_empty_with_a_note(tmp_path):
-    files, note = runner._git_ls_files(tmp_path, "*.py")
-    assert files == []
-    assert "note:" in note
-
-
-# ---------------------------------------------------------------------------
 # Missing-tool paths never read as a clean pass
 # ---------------------------------------------------------------------------
-
-def test_run_noslop_fails_loud_when_not_installed(tmp_path, monkeypatch):
-    _init_git_repo(tmp_path, {"a.py": "print('a')\n"})
-    real_which = shutil.which
-
-    def fake_which(name):
-        if name == "noslop":
-            return None
-        return real_which(name)
-
-    monkeypatch.setattr(shutil, "which", fake_which)
-
-    install_outcome, scan_outcome, summary = runner.run_noslop(
-        tmp_path, "*.py", "*.md", "", "0.10.0", install_missing=False,
-    )
-    assert install_outcome == "failure"
-    assert scan_outcome == "skipped"
-    assert "did not run (not installed)" in summary
-    assert "noslop-lint==0.10.0" in summary
-
 
 def test_run_zizmor_fails_loud_when_not_installed(tmp_path, monkeypatch):
     real_which = shutil.which

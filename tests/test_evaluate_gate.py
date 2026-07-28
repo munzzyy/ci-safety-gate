@@ -14,11 +14,11 @@ import evaluate_gate
 
 
 # ---------------------------------------------------------------------------
-# decide_check (secrets, noslop, zizmor share this)
+# decide_check (secrets, zizmor, skillxray share this)
 # ---------------------------------------------------------------------------
 
 def test_disabled_check_is_skipped_not_failed():
-    r = evaluate_gate.decide_check("noslop", False, "success", "success")
+    r = evaluate_gate.decide_check("zizmor", False, "success", "success")
     assert r.status == "skipped"
     assert "disabled" in r.note
 
@@ -26,12 +26,12 @@ def test_disabled_check_is_skipped_not_failed():
 def test_disabled_check_ignores_outcomes_entirely():
     # Even if the outcomes look broken, a check the caller turned off must
     # never fail the gate -- "off" wins.
-    r = evaluate_gate.decide_check("noslop", False, "failure", "failure")
+    r = evaluate_gate.decide_check("zizmor", False, "failure", "failure")
     assert r.status == "skipped"
 
 
 def test_enabled_check_with_failed_install_is_fail():
-    r = evaluate_gate.decide_check("noslop", True, "failure", "skipped")
+    r = evaluate_gate.decide_check("zizmor", True, "failure", "skipped")
     assert r.status == "fail"
     assert "install" in r.note
 
@@ -47,7 +47,7 @@ def test_enabled_check_with_install_skipped_by_upstream_cascade_is_fail():
 
 
 def test_enabled_check_clean_install_and_clean_scan_is_pass():
-    r = evaluate_gate.decide_check("noslop", True, "success", "success")
+    r = evaluate_gate.decide_check("zizmor", True, "success", "success")
     assert r.status == "pass"
 
 
@@ -113,7 +113,6 @@ def test_skillxray_enabled_with_target_and_scan_found_issue_is_fail():
 def _all_clean(**overrides):
     base = dict(
         secrets_enabled=True, secrets_outcome="success",
-        noslop_enabled=True, install_noslop_outcome="success", noslop_outcome="success",
         zizmor_enabled=True, install_zizmor_outcome="success", zizmor_outcome="success",
         skillxray_enabled=True, skillxray_target="/repo",
         install_skillxray_outcome="success", skillxray_outcome="success",
@@ -129,14 +128,14 @@ def test_all_clean_is_overall_pass():
 
 
 def test_a_broken_install_fails_the_whole_gate():
-    # noslop's install broke (network policy / registry outage / bad pin);
+    # zizmor's install broke (network policy / registry outage / bad pin);
     # everything else is genuinely clean. The gate must still fail.
     results, passed = evaluate_gate.evaluate(**_all_clean(
-        install_noslop_outcome="skipped", noslop_outcome="skipped",
+        install_zizmor_outcome="skipped", zizmor_outcome="skipped",
     ))
     assert passed is False
-    noslop = next(r for r in results if r.name == "noslop")
-    assert noslop.status == "fail"
+    zizmor = next(r for r in results if r.name == "zizmor")
+    assert zizmor.status == "fail"
 
 
 def test_a_disabled_check_does_not_block_an_otherwise_clean_pass():
@@ -156,21 +155,20 @@ def test_a_real_scan_finding_fails_the_whole_gate():
 def test_reported_vulnerability_scenario_is_no_longer_a_silent_pass():
     # The exact scenario from the bug report: an install step for an
     # ENABLED check breaks, cascading a skip onto every step after it
-    # (secrets already ran and was clean; noslop's install is the one that
-    # broke; zizmor and skillxray never even got a chance to install).
+    # (secrets already ran and was clean; zizmor's install is the one that
+    # broke; skillxray never even got a chance to install).
     # Naive logic that only reads the terminal scan step's outcome sees
-    # four "skipped"/"success" results and no "failure" -> PASS. The fixed
-    # logic must fail, because noslop was enabled and never actually ran.
+    # three "skipped"/"success" results and no "failure" -> PASS. The fixed
+    # logic must fail, because zizmor was enabled and never actually ran.
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=True, secrets_outcome="success",
-        noslop_enabled=True, install_noslop_outcome="failure", noslop_outcome="skipped",
-        zizmor_enabled=True, install_zizmor_outcome="skipped", zizmor_outcome="skipped",
+        zizmor_enabled=True, install_zizmor_outcome="failure", zizmor_outcome="skipped",
         skillxray_enabled=True, skillxray_target="",
         install_skillxray_outcome="skipped", skillxray_outcome="skipped",
     )
     assert passed is False, "an install failure on an enabled check must never silently pass the gate"
     statuses = {r.name: r.status for r in results}
-    assert statuses["noslop"] == "fail"
+    assert statuses["zizmor"] == "fail"
 
 
 def test_only_skillxray_enabled_and_its_install_breaks_still_fails():
@@ -179,7 +177,6 @@ def test_only_skillxray_enabled_and_its_install_breaks_still_fails():
     # found real skill content to scan.
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=False, secrets_outcome="skipped",
-        noslop_enabled=False, install_noslop_outcome="skipped", noslop_outcome="skipped",
         zizmor_enabled=False, install_zizmor_outcome="skipped", zizmor_outcome="skipped",
         skillxray_enabled=True, skillxray_target="/repo/skills",
         install_skillxray_outcome="failure", skillxray_outcome="skipped",
@@ -194,11 +191,11 @@ def test_only_skillxray_enabled_and_its_install_breaks_still_fails():
 def test_summary_distinguishes_disabled_from_broken_install():
     results, passed = evaluate_gate.evaluate(**_all_clean(
         zizmor_enabled=False, install_zizmor_outcome="skipped", zizmor_outcome="skipped",
-        install_noslop_outcome="skipped", noslop_outcome="skipped",
+        install_skillxray_outcome="skipped", skillxray_outcome="skipped",
     ))
     text = evaluate_gate.render_summary(results, passed)
     assert "- zizmor: skipped (disabled)" in text
-    assert "- noslop: FAIL (install/setup did not complete" in text
+    assert "- skillxray: FAIL (install/setup did not complete" in text
     assert "**ci-safety-gate: FAIL**" in text
 
 
@@ -229,7 +226,6 @@ def test_summary_omits_setup_python_note_when_it_succeeded():
 
 _ALL_CLEAN_ENV = {
     "INPUTS_SECRETS": "true", "STEPS_SECRETS_OUTCOME": "success",
-    "INPUTS_NOSLOP": "true", "STEPS_INSTALL_NOSLOP_OUTCOME": "success", "STEPS_NOSLOP_OUTCOME": "success",
     "INPUTS_ZIZMOR": "true", "STEPS_INSTALL_ZIZMOR_OUTCOME": "success", "STEPS_ZIZMOR_OUTCOME": "success",
     "INPUTS_SKILLXRAY": "true", "STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET": "/repo",
     "STEPS_INSTALL_SKILLXRAY_OUTCOME": "success", "STEPS_SKILLXRAY_OUTCOME": "success",
@@ -260,7 +256,7 @@ def test_main_all_clean_exits_zero_and_writes_pass(tmp_path, monkeypatch):
 
 def test_main_broken_install_exits_one_and_writes_fail(tmp_path, monkeypatch):
     _set_env(monkeypatch, {
-        "STEPS_INSTALL_NOSLOP_OUTCOME": "skipped", "STEPS_NOSLOP_OUTCOME": "skipped",
+        "STEPS_INSTALL_ZIZMOR_OUTCOME": "skipped", "STEPS_ZIZMOR_OUTCOME": "skipped",
     })
     summary = tmp_path / "summary.md"
     output = tmp_path / "output.txt"
@@ -273,13 +269,13 @@ def test_main_broken_install_exits_one_and_writes_fail(tmp_path, monkeypatch):
     assert output.read_text() == "result=fail\n"
     text = summary.read_text()
     assert "**ci-safety-gate: FAIL**" in text
-    assert "- noslop: FAIL" in text
+    assert "- zizmor: FAIL" in text
 
 
 def test_main_appends_to_existing_summary_rather_than_overwriting(tmp_path, monkeypatch):
     _set_env(monkeypatch)
     summary = tmp_path / "summary.md"
-    summary.write_text("## noslop (AI-slop detection)\n\nclean\n", encoding="utf-8")
+    summary.write_text("## zizmor (GitHub Actions security audit)\n\nclean\n", encoding="utf-8")
     output = tmp_path / "output.txt"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
@@ -287,5 +283,5 @@ def test_main_appends_to_existing_summary_rather_than_overwriting(tmp_path, monk
     evaluate_gate.main()
 
     text = summary.read_text()
-    assert text.startswith("## noslop (AI-slop detection)")
+    assert text.startswith("## zizmor (GitHub Actions security audit)")
     assert "**ci-safety-gate: PASS**" in text

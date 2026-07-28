@@ -68,9 +68,6 @@ def evaluate(
     *,
     secrets_enabled: bool,
     secrets_outcome: str,
-    noslop_enabled: bool,
-    install_noslop_outcome: str,
-    noslop_outcome: str,
     zizmor_enabled: bool,
     install_zizmor_outcome: str,
     zizmor_outcome: str,
@@ -82,7 +79,6 @@ def evaluate(
     """Return (per-check results, overall passed) for the whole gate."""
     results = [
         decide_check("secrets", secrets_enabled, None, secrets_outcome),
-        decide_check("noslop", noslop_enabled, install_noslop_outcome, noslop_outcome),
         decide_check("zizmor", zizmor_enabled, install_zizmor_outcome, zizmor_outcome),
         decide_skillxray(skillxray_enabled, skillxray_target, install_skillxray_outcome, skillxray_outcome),
     ]
@@ -127,9 +123,6 @@ def main() -> int:
     results, passed = evaluate(
         secrets_enabled=_env_bool("INPUTS_SECRETS"),
         secrets_outcome=_env("STEPS_SECRETS_OUTCOME"),
-        noslop_enabled=_env_bool("INPUTS_NOSLOP"),
-        install_noslop_outcome=_env("STEPS_INSTALL_NOSLOP_OUTCOME"),
-        noslop_outcome=_env("STEPS_NOSLOP_OUTCOME"),
         zizmor_enabled=_env_bool("INPUTS_ZIZMOR"),
         install_zizmor_outcome=_env("STEPS_INSTALL_ZIZMOR_OUTCOME"),
         zizmor_outcome=_env("STEPS_ZIZMOR_OUTCOME"),

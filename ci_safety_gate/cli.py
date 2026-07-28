@@ -55,16 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="fail the secrets scan if any file was skipped (too large, "
                          "unreadable, binary) instead of only reporting the skip")
 
-    p.add_argument("--no-noslop", action="store_true", help="skip noslop AI-slop detection")
-    p.add_argument("--noslop-version", default=_default("noslop-version", "0.10.0"),
-                    help="noslop-lint version to install with --install-missing")
-    p.add_argument("--noslop-code-globs", default=_default("noslop-code-globs", "*.py *.js"),
-                    help="space-separated git pathspec globs scored in code mode")
-    p.add_argument("--noslop-docs-globs", default=_default("noslop-docs-globs", "*.md"),
-                    help="space-separated git pathspec globs scored in prose mode")
-    p.add_argument("--noslop-threshold", default=_default("noslop-threshold", ""),
-                    help="score at/above which noslop fails (default: noslop's own default, 10)")
-
     p.add_argument("--no-zizmor", action="store_true", help="skip the zizmor GitHub Actions audit")
     p.add_argument("--zizmor-path", default=_default("zizmor-path", "."),
                     help="path zizmor audits, relative to `path`")
@@ -115,14 +105,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         sections.append(secrets_summary)
 
-    install_noslop_outcome = noslop_outcome = "success"
-    if not args.no_noslop:
-        install_noslop_outcome, noslop_outcome, noslop_summary = runner.run_noslop(
-            root, args.noslop_code_globs, args.noslop_docs_globs, args.noslop_threshold,
-            args.noslop_version, args.install_missing,
-        )
-        sections.append(noslop_summary)
-
     install_zizmor_outcome = zizmor_outcome = "success"
     if not args.no_zizmor:
         install_zizmor_outcome, zizmor_outcome, zizmor_summary = runner.run_zizmor(
@@ -142,9 +124,6 @@ def main(argv: list[str] | None = None) -> int:
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=not args.no_secrets,
         secrets_outcome=secrets_outcome,
-        noslop_enabled=not args.no_noslop,
-        install_noslop_outcome=install_noslop_outcome,
-        noslop_outcome=noslop_outcome,
         zizmor_enabled=not args.no_zizmor,
         install_zizmor_outcome=install_zizmor_outcome,
         zizmor_outcome=zizmor_outcome,
