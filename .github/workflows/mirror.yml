@@ -10,6 +10,12 @@ concurrency: mirror
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    # The deploy key is the only secret this repo uses, and it lives in a
+    # dedicated environment so it can be scoped and reviewed on its own
+    # rather than being readable by every job in the repo. zizmor's
+    # secrets-outside-env audit flags the alternative, and this repo runs
+    # that audit against itself.
+    environment: gitlab-mirror
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
