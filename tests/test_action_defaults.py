@@ -21,9 +21,12 @@ def test_reads_known_input_defaults():
     defaults = action_defaults.input_defaults()
     assert defaults["zizmor-min-severity"] == "medium"
     assert defaults["zizmor-offline"] == "true"
-    assert defaults["skillxray-ref"] == "v0.1.1"
+    assert defaults["zizmor-persona"] == "auditor"
+    assert defaults["zizmor-version"] == ">=1.28.0"
+    assert defaults["skillxray-ref"] == "aef787dda4cdec000c5d200ec203d076dc75b6ff"
     assert defaults["skillxray-fail-on"] == "high"
     assert defaults["secrets-max-bytes"] == "2000000"
+    assert defaults["secrets-annotations"] == "true"
 
 
 def test_default_raises_a_clear_error_for_an_unknown_input():
@@ -37,6 +40,6 @@ def test_default_raises_a_clear_error_for_an_unknown_input():
 
 def test_step_blocks_cover_every_named_step():
     blocks = action_defaults.step_blocks()
-    for name in ("Secrets scan", "zizmor", "skillxray", "Evaluate gate"):
+    for name in ("Secrets scan", "Install zizmor", "zizmor", "skillxray", "Evaluate gate"):
         assert name in blocks
         assert blocks[name].strip() != ""

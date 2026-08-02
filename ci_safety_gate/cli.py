@@ -61,6 +61,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--zizmor-min-severity", default=_default("zizmor-min-severity", "medium"),
                     choices=("informational", "low", "medium", "high"),
                     help="minimum severity zizmor reports")
+    p.add_argument("--zizmor-persona", default=_default("zizmor-persona", "auditor"),
+                    choices=("regular", "pedantic", "auditor"),
+                    help="which zizmor persona to run; auditor is the default, same as action.yml, "
+                         "because some audits only fire under it")
+    p.add_argument("--zizmor-version", default=_default("zizmor-version", ">=1.28.0"),
+                    help="version specifier --install-missing installs zizmor with")
     p.add_argument("--zizmor-online", action="store_true",
                     help="allow zizmor's GitHub-API-backed checks (needs a token in the environment); "
                          "offline is the default, same as action.yml")
@@ -109,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_zizmor:
         install_zizmor_outcome, zizmor_outcome, zizmor_summary = runner.run_zizmor(
             root, args.zizmor_path, args.zizmor_min_severity, not args.zizmor_online,
-            args.install_missing,
+            args.install_missing, args.zizmor_persona, args.zizmor_version,
         )
         sections.append(zizmor_summary)
 

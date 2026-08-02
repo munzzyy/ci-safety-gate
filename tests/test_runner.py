@@ -176,7 +176,9 @@ def test_run_zizmor_fails_loud_when_not_installed(tmp_path, monkeypatch):
     assert install_outcome == "failure"
     assert scan_outcome == "skipped"
     assert "did not run (not installed)" in summary
-    assert "pip install zizmor" in summary
+    # The hint has to name the same floored spec the action installs, not a
+    # bare `pip install zizmor` that resolves anything.
+    assert 'pip install "zizmor>=1.28.0"' in summary
 
 
 def test_run_skillxray_fails_loud_when_not_installed(tmp_path, monkeypatch):

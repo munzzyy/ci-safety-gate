@@ -39,7 +39,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install zizmor
-        run: python -m pip install --quiet zizmor
+        # Same floor action.yml's zizmor-version input defaults to: 1.28.0
+        # is the first release without GHSA-f42p-wjw5-97qh.
+        run: python -m pip install --quiet "zizmor>=1.28.0"
       - name: zizmor over this repo's own action and workflows
         run: zizmor --offline --no-progress --color never .
 

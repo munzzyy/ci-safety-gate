@@ -19,6 +19,14 @@ inputs:
     description: "Run zizmor's GitHub Actions security audit."
     required: false
     default: "true"
+  zizmor-version:
+    description: "Version specifier pip installs zizmor with. A floor rather than an exact pin, so a fix ships without a release here; 1.28.0 is the first version without GHSA-f42p-wjw5-97qh, which printed available GitHub credentials in cleartext."
+    required: false
+    default: ">=1.28.0"
+  zizmor-persona:
+    description: "Which zizmor persona to run (regular, pedantic, or auditor). auditor is the default because several audits, secrets-outside-env among them, only fire under it, so a regular run reports a pass while a whole class of findings stays hidden."
+    required: false
+    default: "auditor"
   zizmor-path:
     description: "Path zizmor audits (workflows and any action.yml under it)."
     required: false
@@ -37,9 +45,9 @@ inputs:
     required: false
     default: "true"
   skillxray-ref:
-    description: "Git tag of munzzyy/skillxray to install (it installs from source until it's on PyPI)."
+    description: "Commit of munzzyy/skillxray to install (it installs from source until it's on PyPI). Pinned by full commit SHA, not by tag, because a tag can be moved under you; this one is v0.1.1."
     required: false
-    default: "v0.1.1"
+    default: "aef787dda4cdec000c5d200ec203d076dc75b6ff"
   skillxray-path:
     description: "Path to scan. Leave empty to auto-detect SKILL.md / skills/ / .claude and skip cleanly if none exist."
     required: false
@@ -66,9 +74,13 @@ inputs:
     required: false
     default: "2000000"
   secrets-fail-on-skip:
-    description: "Fail the secrets scan if any file was skipped (too large, unreadable, binary) instead of only reporting it. Default reports skips without failing."
+    description: "Fail the secrets scan if any file could not be read (too large, unreadable, binary, a symlink) instead of only reporting it. Directories skipped by policy, .git and __pycache__ among them, never fail the run. Default reports without failing."
     required: false
     default: "false"
+  secrets-annotations:
+    description: "Emit a GitHub annotation per secrets finding, so it lands on the diff in Files Changed instead of only in the job summary."
+    required: false
+    default: "true"
 
 outputs:
   result:
@@ -117,6 +129,13 @@ runs:
         if [ "${INPUTS_SECRETS_FAIL_ON_SKIP}" = "true" ]; then
           args+=(--fail-on-skip)
         fi
+        if [ "${INPUTS_SECRETS_ANNOTATIONS}" = "true" ]; then
+          args+=(--github-annotations)
+        fi
+        # Only stdout is redirected into the summary. The annotations go to
+        # stderr precisely so they stay in the job log, where the runner
+        # reads workflow commands; a ::error line written into a markdown
+        # file does nothing.
         python3 "${{ github.action_path }}/scan_secrets.py" "${args[@]}" >> "$GITHUB_STEP_SUMMARY"
         code=$?
         set -e
@@ -126,6 +145,7 @@ runs:
         INPUTS_SECRETS_MAX_BYTES: ${{ inputs.secrets-max-bytes }}
         INPUTS_SECRETS_EXCLUDE: ${{ inputs.secrets-exclude }}
         INPUTS_SECRETS_FAIL_ON_SKIP: ${{ inputs.secrets-fail-on-skip }}
+        INPUTS_SECRETS_ANNOTATIONS: ${{ inputs.secrets-annotations }}
 
     - name: Install zizmor
       id: install-zizmor
@@ -136,7 +156,9 @@ runs:
       # Python) -- continue-on-error plus the id lets "Evaluate gate" tell
       # "this check's install broke" apart from "this check is disabled".
       continue-on-error: true
-      run: python3 -m pip install --quiet zizmor
+      run: python3 -m pip install --quiet "zizmor${INPUTS_ZIZMOR_VERSION}"
+      env:
+        INPUTS_ZIZMOR_VERSION: ${{ inputs.zizmor-version }}
 
     - name: zizmor
       id: zizmor
@@ -151,6 +173,7 @@ runs:
           offline_flag="--offline"
         fi
         zizmor --no-progress --color never $offline_flag \
+          --persona "${INPUTS_ZIZMOR_PERSONA}" \
           --min-severity "${INPUTS_ZIZMOR_MIN_SEVERITY}" \
           "${INPUTS_ZIZMOR_PATH}" > "$out" 2>&1
         code=$?
@@ -165,6 +188,7 @@ runs:
         exit "$code"
       env:
         INPUTS_ZIZMOR_OFFLINE: ${{ inputs.zizmor-offline }}
+        INPUTS_ZIZMOR_PERSONA: ${{ inputs.zizmor-persona }}
         INPUTS_ZIZMOR_MIN_SEVERITY: ${{ inputs.zizmor-min-severity }}
         INPUTS_ZIZMOR_PATH: ${{ inputs.zizmor-path }}
 
