@@ -11,8 +11,8 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e . pytest
 ```
 
-`scan_secrets.py` and `evaluate_gate.py` are stdlib-only scripts action.yml calls by path; the
-`ci_safety_gate/` package wraps them into `ci-safety-gate --local`, the CLI that reproduces the
+`scan_secrets.py`, `checkout_safety.py` and `evaluate_gate.py` are stdlib-only scripts action.yml
+calls by path; the `ci_safety_gate/` package wraps them into `ci-safety-gate --local`, the CLI that reproduces the
 whole gate on your own machine (see the README's "Running the gate locally"). Everything else
 is YAML and shells out to zizmor and skillxray.
 
@@ -26,10 +26,10 @@ CI runs the same suite on Linux, macOS, and Windows, plus an integration job tha
 composite action against a fixture tree inside this repo (`examples/demo`) and against a planted
 fake credential, so both the pass and the fail path are proven, not just claimed.
 
-## Changing scan_secrets.py
+## Changing scan_secrets.py or checkout_safety.py
 
-Every credential pattern change lands with a test: a positive case that must be caught and, if
-the change could over-match, a benign case that must stay clean. `redact()` must never let a full
+Every credential pattern or workflow rule change lands with a test: a positive case that must be
+caught and, if the change could over-match, a benign case that must stay clean. `redact()` must never let a full
 matched value reach stdout, JSON, or the step summary; there's a test for that too.
 
 ## Changing action.yml
@@ -45,7 +45,7 @@ zizmor --offline action.yml
 Keep third-party actions pinned to a commit SHA, not a tag.
 
 If you change a flag or default a check runs (zizmor or skillxray), update it in both
-`action.yml`'s bash and `ci_safety_gate/checks.py` — `tests/test_checks.py` asserts the two
+`action.yml`'s bash and `ci_safety_gate/checks.py`. `tests/test_checks.py` asserts the two
 still match, so a real drift fails CI rather than shipping quietly. Defaults themselves
 (versions, globs, thresholds) only live in `action.yml`; `ci_safety_gate/action_defaults.py`
 reads them from there at run time, so there's no second copy of those to keep in sync by hand.
