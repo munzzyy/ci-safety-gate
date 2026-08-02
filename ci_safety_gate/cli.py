@@ -55,6 +55,15 @@ def build_parser() -> argparse.ArgumentParser:
                     help="fail the secrets scan if any file was skipped (too large, "
                          "unreadable, binary) instead of only reporting the skip")
 
+    p.add_argument("--no-checkout-safety", action="store_true",
+                    help="skip the fork pull request checkout check")
+    p.add_argument("--checkout-safety-path", default=_default("checkout-safety-path", "."),
+                    help="repo root whose .github/workflows the check reads, relative to `path`")
+    p.add_argument("--checkout-safety-fail-on",
+                    default=_default("checkout-safety-fail-on", "high"),
+                    choices=("high", "medium", "low", "none"),
+                    help="minimum severity that fails the checkout-safety check")
+
     p.add_argument("--no-zizmor", action="store_true", help="skip the zizmor GitHub Actions audit")
     p.add_argument("--zizmor-path", default=_default("zizmor-path", "."),
                     help="path zizmor audits, relative to `path`")
@@ -111,6 +120,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         sections.append(secrets_summary)
 
+    checkout_safety_outcome = "success"
+    if not args.no_checkout_safety:
+        _, checkout_safety_outcome, checkout_safety_summary = runner.run_checkout_safety(
+            root, args.checkout_safety_path, args.checkout_safety_fail_on,
+        )
+        sections.append(checkout_safety_summary)
+
     install_zizmor_outcome = zizmor_outcome = "success"
     if not args.no_zizmor:
         install_zizmor_outcome, zizmor_outcome, zizmor_summary = runner.run_zizmor(
@@ -130,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=not args.no_secrets,
         secrets_outcome=secrets_outcome,
+        checkout_safety_enabled=not args.no_checkout_safety,
+        checkout_safety_outcome=checkout_safety_outcome,
         zizmor_enabled=not args.no_zizmor,
         install_zizmor_outcome=install_zizmor_outcome,
         zizmor_outcome=zizmor_outcome,

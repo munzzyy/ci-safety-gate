@@ -46,6 +46,14 @@ def test_secrets_argv_omits_annotations_by_default():
     assert "--github-annotations" not in checks.secrets_argv("some/path", 2_000_000, [])
 
 
+def test_checkout_safety_argv_flags_match_action_yml():
+    argv = checks.checkout_safety_argv("some/path", "high")
+    assert argv == ["some/path", "--fail-on", "high", "--summary"]
+    block = action_defaults.step_block("Checkout safety")
+    for flag in ("--fail-on", "--summary"):
+        assert flag in block
+
+
 def test_zizmor_argv_flags_match_action_yml():
     argv = checks.zizmor_argv(".", "high", True, "auditor")
     assert argv == ["zizmor", "--no-progress", "--color", "never", "--offline",

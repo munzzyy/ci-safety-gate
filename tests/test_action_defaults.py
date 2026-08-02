@@ -27,6 +27,7 @@ def test_reads_known_input_defaults():
     assert defaults["skillxray-fail-on"] == "high"
     assert defaults["secrets-max-bytes"] == "2000000"
     assert defaults["secrets-annotations"] == "true"
+    assert defaults["checkout-safety-fail-on"] == "high"
 
 
 def test_default_raises_a_clear_error_for_an_unknown_input():
@@ -40,6 +41,7 @@ def test_default_raises_a_clear_error_for_an_unknown_input():
 
 def test_step_blocks_cover_every_named_step():
     blocks = action_defaults.step_blocks()
-    for name in ("Secrets scan", "Install zizmor", "zizmor", "skillxray", "Evaluate gate"):
+    for name in ("Secrets scan", "Checkout safety", "Install zizmor", "zizmor",
+                 "skillxray", "Evaluate gate"):
         assert name in blocks
         assert blocks[name].strip() != ""

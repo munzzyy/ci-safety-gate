@@ -246,3 +246,36 @@ def test_run_secrets_fail_on_skip_turns_a_skip_into_a_failure(tmp_path):
     assert scan_outcome_strict == "failure"
     assert "big.py" in summary
     assert "too large" in summary
+
+
+# ---------------------------------------------------------------------------
+# run_checkout_safety
+# ---------------------------------------------------------------------------
+
+def test_run_checkout_safety_passes_on_a_repo_with_no_workflows(tmp_path):
+    (tmp_path / "app.py").write_text("print('hi')\n", encoding="utf-8")
+    install_outcome, scan_outcome, summary = runner.run_checkout_safety(tmp_path, ".", "high")
+    assert install_outcome is None
+    assert scan_outcome == "success"
+    assert "Checkout safety" in summary
+
+
+def test_run_checkout_safety_fails_on_an_unsafe_pr_checkout(tmp_path):
+    wf = tmp_path / ".github" / "workflows"
+    wf.mkdir(parents=True)
+    (wf / "build.yml").write_text(
+        "name: build\n"
+        "on:\n"
+        "  pull_request_target:\n"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        "      - uses: actions/checkout@v7\n"
+        "        with:\n"
+        "          allow-unsafe-pr-checkout: true\n",
+        encoding="utf-8",
+    )
+    _, scan_outcome, summary = runner.run_checkout_safety(tmp_path, ".", "high")
+    assert scan_outcome == "failure"
+    assert "allow-unsafe-pr-checkout" in summary

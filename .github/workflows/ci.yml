@@ -70,6 +70,27 @@ jobs:
           fi
           echo "confirmed: scan_secrets.py exits non-zero on a planted credential"
 
+      - name: Prove checkout_safety.py catches an unsafe fork checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/unsafe/.github/workflows"
+          {
+            echo "name: build"
+            echo "on:"
+            echo "  pull_request_target:"
+            echo "jobs:"
+            echo "  build:"
+            echo "    runs-on: ubuntu-latest"
+            echo "    steps:"
+            echo "      - uses: actions/checkout@v7"
+            echo "        with:"
+            echo "          allow-unsafe-pr-checkout: true"
+          } > "$RUNNER_TEMP/unsafe/.github/workflows/build.yml"
+          if python3 checkout_safety.py "$RUNNER_TEMP/unsafe"; then
+            echo "expected checkout_safety.py to exit non-zero on allow-unsafe-pr-checkout" >&2
+            exit 1
+          fi
+          echo "confirmed: checkout_safety.py exits non-zero on an unsafe fork checkout"
+
       # Now prove the composite action itself is wired correctly, using a local
       # `uses: ./` reference against this same checkout.
       - name: Composite action passes against this repo (dogfood, all checks on)
@@ -81,7 +102,29 @@ jobs:
         with:
           zizmor: "false"
           secrets: "false"
+          checkout-safety: "false"
           skillxray: "true"
+
+      - name: Composite action fails on an unsafe fork checkout
+        id: negative_checkout
+        continue-on-error: true
+        uses: ./
+        with:
+          zizmor: "false"
+          secrets: "false"
+          skillxray: "false"
+          checkout-safety: "true"
+          checkout-safety-path: ${{ runner.temp }}/unsafe
+
+      - name: Assert the checkout-safety negative case actually failed
+        env:
+          NEGATIVE_CHECKOUT_OUTCOME: ${{ steps.negative_checkout.outcome }}
+        run: |
+          if [ "$NEGATIVE_CHECKOUT_OUTCOME" != "failure" ]; then
+            echo "expected the gate to fail on an unsafe fork checkout, got: $NEGATIVE_CHECKOUT_OUTCOME" >&2
+            exit 1
+          fi
+          echo "confirmed: the composite action fails the job on an unsafe fork checkout"
 
       - name: Plant a fake credential outside the checkout
         run: |
@@ -95,6 +138,7 @@ jobs:
         with:
           zizmor: "false"
           skillxray: "false"
+          checkout-safety: "false"
           secrets: "true"
           secrets-path: ${{ runner.temp }}/negative-gate
 

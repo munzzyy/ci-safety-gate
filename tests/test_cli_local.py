@@ -130,3 +130,39 @@ def test_without_local_flag_is_a_no_op_not_a_crash(capsys):
     err = capsys.readouterr().err
     assert code == 2
     assert "--local" in err
+
+
+def test_local_flags_an_unsafe_pr_checkout_and_fails_the_gate(tmp_path, capsys):
+    _init_git_repo(tmp_path, {
+        ".github/workflows/build.yml": (
+            "name: build\n"
+            "on:\n"
+            "  pull_request_target:\n"
+            "jobs:\n"
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v7\n"
+            "        with:\n"
+            "          allow-unsafe-pr-checkout: true\n"
+        ),
+    })
+
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "## Checkout safety" in out
+    assert "checkout-safety: FAIL" in out
+
+
+def test_local_checkout_safety_can_be_turned_off(tmp_path, capsys):
+    _init_git_repo(tmp_path, {"app.py": "print('hi')\n"})
+
+    code = cli.main([
+        "--local", "--no-zizmor", "--no-skillxray", "--no-checkout-safety", str(tmp_path),
+    ])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "checkout-safety: skipped (disabled)" in out

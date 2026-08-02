@@ -31,7 +31,7 @@ Issues = "https://github.com/munzzyy/ci-safety-gate/issues"
 ci-safety-gate = "ci_safety_gate.cli:main"
 
 [tool.setuptools]
-py-modules = ["evaluate_gate", "scan_secrets"]
+py-modules = ["evaluate_gate", "scan_secrets", "checkout_safety"]
 
 [tool.setuptools.packages.find]
 include = ["ci_safety_gate*"]

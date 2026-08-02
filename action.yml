@@ -82,6 +82,19 @@ inputs:
     required: false
     default: "true"
 
+  checkout-safety:
+    description: "Check the repo's workflows for an unsafe fork pull request checkout."
+    required: false
+    default: "true"
+  checkout-safety-path:
+    description: "Repo root whose .github/workflows the check reads (or a single workflow file)."
+    required: false
+    default: "."
+  checkout-safety-fail-on:
+    description: "Minimum severity that fails the checkout-safety check (high|medium|low|none). Default high, which fails on an explicit allow-unsafe-pr-checkout or a stale pin on a step that checks out the pull request head, and reports the rest."
+    required: false
+    default: "high"
+
 outputs:
   result:
     description: "'pass' or 'fail', the combined verdict across every enabled check."
@@ -146,6 +159,22 @@ runs:
         INPUTS_SECRETS_EXCLUDE: ${{ inputs.secrets-exclude }}
         INPUTS_SECRETS_FAIL_ON_SKIP: ${{ inputs.secrets-fail-on-skip }}
         INPUTS_SECRETS_ANNOTATIONS: ${{ inputs.secrets-annotations }}
+
+    - name: Checkout safety
+      id: checkout-safety
+      if: inputs.checkout-safety == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        set +e
+        python3 "${{ github.action_path }}/checkout_safety.py" "${INPUTS_CHECKOUT_SAFETY_PATH}" \
+          --fail-on "${INPUTS_CHECKOUT_SAFETY_FAIL_ON}" --summary >> "$GITHUB_STEP_SUMMARY"
+        code=$?
+        set -e
+        exit "$code"
+      env:
+        INPUTS_CHECKOUT_SAFETY_PATH: ${{ inputs.checkout-safety-path }}
+        INPUTS_CHECKOUT_SAFETY_FAIL_ON: ${{ inputs.checkout-safety-fail-on }}
 
     - name: Install zizmor
       id: install-zizmor
@@ -276,6 +305,8 @@ runs:
         STEPS_SETUP_PYTHON_OUTCOME: ${{ steps.setup-python.outcome }}
         INPUTS_SECRETS: ${{ inputs.secrets }}
         STEPS_SECRETS_OUTCOME: ${{ steps.secrets.outcome }}
+        INPUTS_CHECKOUT_SAFETY: ${{ inputs.checkout-safety }}
+        STEPS_CHECKOUT_SAFETY_OUTCOME: ${{ steps.checkout-safety.outcome }}
         INPUTS_ZIZMOR: ${{ inputs.zizmor }}
         STEPS_INSTALL_ZIZMOR_OUTCOME: ${{ steps.install-zizmor.outcome }}
         STEPS_ZIZMOR_OUTCOME: ${{ steps.zizmor.outcome }}

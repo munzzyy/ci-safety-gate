@@ -113,6 +113,7 @@ def test_skillxray_enabled_with_target_and_scan_found_issue_is_fail():
 def _all_clean(**overrides):
     base = dict(
         secrets_enabled=True, secrets_outcome="success",
+        checkout_safety_enabled=True, checkout_safety_outcome="success",
         zizmor_enabled=True, install_zizmor_outcome="success", zizmor_outcome="success",
         skillxray_enabled=True, skillxray_target="/repo",
         install_skillxray_outcome="success", skillxray_outcome="success",
@@ -162,6 +163,7 @@ def test_reported_vulnerability_scenario_is_no_longer_a_silent_pass():
     # logic must fail, because zizmor was enabled and never actually ran.
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=True, secrets_outcome="success",
+        checkout_safety_enabled=True, checkout_safety_outcome="success",
         zizmor_enabled=True, install_zizmor_outcome="failure", zizmor_outcome="skipped",
         skillxray_enabled=True, skillxray_target="",
         install_skillxray_outcome="skipped", skillxray_outcome="skipped",
@@ -177,6 +179,7 @@ def test_only_skillxray_enabled_and_its_install_breaks_still_fails():
     # found real skill content to scan.
     results, passed = evaluate_gate.evaluate(
         secrets_enabled=False, secrets_outcome="skipped",
+        checkout_safety_enabled=False, checkout_safety_outcome="skipped",
         zizmor_enabled=False, install_zizmor_outcome="skipped", zizmor_outcome="skipped",
         skillxray_enabled=True, skillxray_target="/repo/skills",
         install_skillxray_outcome="failure", skillxray_outcome="skipped",
@@ -285,3 +288,26 @@ def test_main_appends_to_existing_summary_rather_than_overwriting(tmp_path, monk
     text = summary.read_text()
     assert text.startswith("## zizmor (GitHub Actions security audit)")
     assert "**ci-safety-gate: PASS**" in text
+
+
+def test_a_checkout_safety_finding_fails_the_whole_gate():
+    results, passed = evaluate_gate.evaluate(**_all_clean(checkout_safety_outcome="failure"))
+    assert passed is False
+    check = next(r for r in results if r.name == "checkout-safety")
+    assert check.status == "fail"
+
+
+def test_checkout_safety_that_never_ran_is_a_fail_not_a_pass():
+    # Enabled, nothing installed to break, and still no real outcome: the
+    # step was cancelled or something upstream broke. Fail closed.
+    results, passed = evaluate_gate.evaluate(**_all_clean(checkout_safety_outcome="skipped"))
+    assert passed is False
+
+
+def test_disabled_checkout_safety_is_skipped_not_failed():
+    results, passed = evaluate_gate.evaluate(**_all_clean(
+        checkout_safety_enabled=False, checkout_safety_outcome="skipped",
+    ))
+    assert passed is True
+    check = next(r for r in results if r.name == "checkout-safety")
+    assert check.status == "skipped"

@@ -31,6 +31,11 @@ def secrets_argv(path: str, max_bytes: int, excludes: list[str],
     return argv
 
 
+def checkout_safety_argv(path: str, fail_on: str) -> list[str]:
+    """Matches action.yml's "Checkout safety" step exactly."""
+    return [path, "--fail-on", fail_on, "--summary"]
+
+
 def zizmor_argv(path: str, min_severity: str, offline: bool,
                 persona: str = "auditor") -> list[str]:
     """Matches action.yml's zizmor step exactly, including flag order."""

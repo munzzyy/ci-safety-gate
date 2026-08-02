@@ -83,6 +83,17 @@ def run_secrets(root: Path, path: str, max_bytes: int, excludes: list[str],
     return None, _outcome_from_returncode(proc.returncode), summary
 
 
+def run_checkout_safety(root: Path, path: str, fail_on: str) -> tuple[None, str, str]:
+    """checkout_safety.py is stdlib-only like the secrets scan, so there is
+    no install step and install_outcome is always None."""
+    script = Path(__file__).resolve().parent.parent / "checkout_safety.py"
+    argv = [sys.executable, str(script), *checks.checkout_safety_argv(path, fail_on)]
+    proc = subprocess.run(argv, cwd=str(root), capture_output=True, text=True, **_DECODE)
+    # Its --summary output already starts with "## Checkout safety".
+    summary = proc.stdout if proc.stdout.strip() else "## Checkout safety\n\n(no output)\n"
+    return None, _outcome_from_returncode(proc.returncode), summary
+
+
 def run_zizmor(
     root: Path,
     path: str,
