@@ -6,10 +6,10 @@ Security fixes. If you are pinned to `v0.1.0`, move.
 
 ### Do not use v0.1.0
 
-`v0.1.0` runs a check that pip-installs `noslop-lint`, a package that was
-deleted from PyPI on 2026-07-28. The name is unclaimed, so anyone can register
-it and have their install hooks run inside your CI job, with that job's token
-and secrets in the environment. The check itself was removed from the default
+`v0.1.0` runs a check that pip-installs a package which was deleted from PyPI
+on 2026-07-28. The name is unclaimed, so anyone can register it and have their
+install hooks run inside your CI job, with that job's token and secrets in the
+environment. The check itself was removed from the default
 branch back in f1f0ca6, but the tag, the README and the example workflow all
 still pointed at it. They point at `v0.1.1` now.
 
