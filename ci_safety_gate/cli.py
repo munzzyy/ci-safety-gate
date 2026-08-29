@@ -6,12 +6,15 @@ steps run -- same commands, same flags (checks.py), same defaults
 verdict logic (evaluate_gate.py) -- against a directory on this machine,
 and prints the combined summary to stdout instead of $GITHUB_STEP_SUMMARY.
 That's what lets a PR author see the exact result CI will produce before
-they ever push.
+they ever push. Pass --json for a machine-readable pass/fail-per-check
+result instead, for a wrapper script or another CI system that wants to
+branch on an individual check rather than just the overall gate.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -42,6 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="pip install a missing tool the same way action.yml's own install steps do, "
                          "instead of just reporting it as not installed")
     p.add_argument("--version", action="version", version=f"ci-safety-gate {__version__}")
+    p.add_argument("--json", action="store_true",
+                    help="print a machine-readable pass/fail-per-check result instead of "
+                         "the markdown summary")
 
     p.add_argument("--no-secrets", action="store_true", help="skip the bundled secrets scan")
     p.add_argument("--secrets-path", default=_default("secrets-path", "."),
@@ -156,6 +162,13 @@ def main(argv: list[str] | None = None) -> int:
         install_skillxray_outcome=install_skillxray_outcome,
         skillxray_outcome=skillxray_outcome,
     )
+    if args.json:
+        print(json.dumps({
+            "passed": passed,
+            "checks": [{"name": r.name, "status": r.status, "note": r.note} for r in results],
+        }))
+        return 0 if passed else 1
+
     sections.append(evaluate_gate.render_summary(results, passed))
 
     print("\n".join(sections))

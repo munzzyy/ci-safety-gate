@@ -12,6 +12,7 @@ test_runner.py.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 
@@ -154,6 +155,35 @@ def test_local_flags_an_unsafe_pr_checkout_and_fails_the_gate(tmp_path, capsys):
     assert code == 1
     assert "## Checkout safety" in out
     assert "checkout-safety: FAIL" in out
+
+
+def test_local_json_reports_pass_and_a_result_per_check(tmp_path, capsys):
+    _init_git_repo(tmp_path, {"app.py": "print('hi')\n"})
+
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", "--json", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert code == 0
+    assert payload["passed"] is True
+    checks_by_name = {c["name"]: c for c in payload["checks"]}
+    assert checks_by_name["secrets"]["status"] == "pass"
+    assert checks_by_name["zizmor"]["status"] == "skipped"
+
+
+def test_local_json_reports_fail_on_a_planted_credential(tmp_path, capsys):
+    token = "ghp_" + "1" * 36
+    _init_git_repo(tmp_path, {"leak.py": f"TOKEN = {token!r}\n"})
+
+    code = cli.main(["--local", "--no-zizmor", "--no-skillxray", "--json", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    payload = json.loads(out)
+    assert code == 1
+    assert payload["passed"] is False
+    checks_by_name = {c["name"]: c for c in payload["checks"]}
+    assert checks_by_name["secrets"]["status"] == "fail"
+    assert "# CI Safety Gate" not in out
 
 
 def test_local_checkout_safety_can_be_turned_off(tmp_path, capsys):
