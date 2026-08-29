@@ -1,0 +1,7 @@
+-   id: ci-safety-gate
+    name: CI Safety Gate
+    description: Run munzzyy/ci-safety-gate's bundled checks locally, the same way CI runs them.
+    entry: ci-safety-gate --local
+    language: python
+    pass_filenames: false
+    always_run: true

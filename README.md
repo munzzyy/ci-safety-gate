@@ -148,6 +148,24 @@ with --install-missing to do it automatically.
 Pass `--install-missing` and it runs the exact `pip install` action.yml's own install steps
 run (same version floor, same skillxray commit) instead of just naming the command.
 
+### Running as a pre-commit hook
+
+This repo ships a `.pre-commit-hooks.yaml`, so any repo already using
+[pre-commit](https://pre-commit.com) can wire the gate in as a local hook and find out
+about a failure before it's a red PR instead of after:
+
+```yaml
+-   repo: https://github.com/munzzyy/ci-safety-gate
+    rev: main  # pin to a tag once one exists
+    hooks:
+    -   id: ci-safety-gate
+```
+
+pre-commit clones this repo and installs it into its own hook environment, which is
+exactly the checkout `--local` needs to find `action.yml` (see Known limitations below),
+so there's nothing extra to set up. The hook runs `ci-safety-gate --local` and picks up
+whatever flags you pass it with `args:`.
+
 ### Known limitations
 
 - `--local` only works from a checkout of this repo (`git clone` + `pip install -e .`), since
