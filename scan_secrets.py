@@ -4,7 +4,8 @@
 Standard library only. Walks a directory (or checks a single file), skips
 binaries and anything past a size cap, and matches a short list of
 high-precision credential formats: AWS access key IDs, GitHub and GitLab
-tokens, OpenAI/Anthropic/Stripe API keys, and PEM private key blocks.
+tokens, OpenAI/Anthropic/Stripe/Slack/Google/npm/Twilio API keys, and PEM
+private key blocks.
 
 Matched values are never printed in full. Exit code 0 means clean, 1 means
 at least one credential-shaped string was found, 2 means the scan itself
@@ -61,6 +62,10 @@ PATTERNS = [
     ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{20,}\b")),
     ("OpenAI API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{32,}\b")),
     ("Stripe secret key", re.compile(r"\b(?:sk|rk)_live_[0-9A-Za-z]{20,}\b")),
+    ("Slack token", re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{10,}\b")),
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
+    ("npm access token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
+    ("Twilio API key", re.compile(r"\bSK[0-9a-fA-F]{32}\b")),
     ("private key block", re.compile(
         r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----")),
 ]

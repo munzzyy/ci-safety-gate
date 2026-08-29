@@ -30,6 +30,11 @@ CREDENTIALS = {
     "openai_project_key": ("OpenAI API key", "sk-proj-" + "0" * 32),
     "stripe_secret": ("Stripe secret key", "sk_live_" + "0" * 20),
     "stripe_restricted": ("Stripe secret key", "rk_live_" + "0" * 20),
+    "slack_bot_token": ("Slack token", "xoxb-" + "1" * 12),
+    "slack_user_token": ("Slack token", "xoxp-" + "2" * 12),
+    "google_api_key": ("Google API key", "AIza" + "0" * 35),
+    "npm_token": ("npm access token", "npm_" + "a" * 36),
+    "twilio_api_key": ("Twilio API key", "SK" + "0" * 32),
     "private_key_rsa": ("private key block", "-----BEGIN " + "RSA PRIVATE KEY" + "-----"),
     "private_key_generic": ("private key block", "-----BEGIN " + "PRIVATE KEY" + "-----"),
     "private_key_openssh": ("private key block", "-----BEGIN " + "OPENSSH PRIVATE KEY" + "-----"),
@@ -41,6 +46,9 @@ BENIGN_SNIPPETS = {
     "short_openai_prefix": "key = 'sk-short'\n",
     "plain_password": "password = 'hunter2'\n",
     "angle_bracket_placeholder": "aws_access_key_id: <YOUR_KEY_HERE>\n",
+    "short_npm_prefix": "token = 'npm_placeholder'\n",
+    "short_twilio_prefix": "sid = 'SKID12345'\n",
+    "short_google_prefix": "key = 'AIzaShort'\n",
     "ordinary_code": (
         "def greet(name):\n"
         "    return f'hello {name}'\n"
