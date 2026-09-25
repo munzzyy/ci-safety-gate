@@ -94,11 +94,11 @@ jobs:
       # Now prove the composite action itself is wired correctly, using a local
       # `uses: ./` reference against this same checkout.
       - name: Composite action passes against this repo (dogfood, all checks on)
-        uses: ./
+        uses: ./  # zizmor: ignore[self-repository] tests this checkout's own action
 
       - name: Composite action's skillxray step auto-skips with no skill content
         id: auto_skip
-        uses: ./
+        uses: ./  # zizmor: ignore[self-repository] tests this checkout's own action
         with:
           zizmor: "false"
           secrets: "false"
@@ -108,7 +108,7 @@ jobs:
       - name: Composite action fails on an unsafe fork checkout
         id: negative_checkout
         continue-on-error: true
-        uses: ./
+        uses: ./  # zizmor: ignore[self-repository] tests this checkout's own action
         with:
           zizmor: "false"
           secrets: "false"
@@ -134,7 +134,7 @@ jobs:
       - name: Composite action fails on the planted credential
         id: negative_gate
         continue-on-error: true
-        uses: ./
+        uses: ./  # zizmor: ignore[self-repository] tests this checkout's own action
         with:
           zizmor: "false"
           skillxray: "false"
