@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Relicensed to GPL-3.0-or-later. Releases up to v0.1.1 were under MIT.
+
 ## 0.1.1
 
 Security fixes. If you are pinned to `v0.1.0`, move.

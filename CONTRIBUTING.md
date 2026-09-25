@@ -52,4 +52,4 @@ reads them from there at run time, so there's no second copy of those to keep in
 
 ## License
 
-By opening a PR you agree your contribution is offered under the project's MIT license.
+By opening a PR you agree your contribution is offered under the project's GPL-3.0-or-later license.

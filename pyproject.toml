@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "ci-safety-gate"
 version = "0.1.1"
 description = "Run the exact zizmor/skillxray/secrets gate munzzyy/ci-safety-gate runs in CI, locally, before you open a PR."
 readme = "README.md"
-license = { text = "MIT" }
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 authors = [{ name = "Cole Munz" }]
 dependencies = []
@@ -15,7 +16,6 @@ keywords = ["ci", "github-actions", "security", "zizmor", "skillxray",
             "secrets-scanning", "pre-commit", "sast"]
 classifiers = [
     "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: MIT License",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
