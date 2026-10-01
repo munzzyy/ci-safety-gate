@@ -127,8 +127,8 @@ def run_zizmor(
 
 def detect_skillxray_target(root: Path, max_depth: int = 6) -> str:
     """Port of action.yml's "Detect skill-shaped content" find pipeline:
-    prune .git/node_modules anywhere, and if a SKILL.md file or a skills/
-    or .claude/ directory turns up within max_depth levels, the whole
+    prune .git/node_modules anywhere, and if a SKILL.md file or a skills/,
+    .claude/ or .claude-plugin/ directory turns up within max_depth levels, the whole
     root is the target (skillxray scans the repo, not just the hit).
     A faithful-enough port for real repo layouts, not a byte-exact
     reimplementation of every GNU find edge case; tests/test_checks.py
@@ -144,7 +144,7 @@ def detect_skillxray_target(root: Path, max_depth: int = 6) -> str:
             continue
         if "SKILL.md" in filenames:
             return str(root)
-        if any(d in ("skills", ".claude") for d in dirnames):
+        if any(d in ("skills", ".claude", ".claude-plugin") for d in dirnames):
             return str(root)
     return ""
 
@@ -164,7 +164,7 @@ def run_skillxray(
     target = configured_path or detect_skillxray_target(root)
     if not target:
         return target, None, "skipped", (
-            f"## {heading}\n\nskipped: no SKILL.md, skills/, or .claude/ found\n"
+            f"## {heading}\n\nskipped: no SKILL.md, skills/, .claude/ or .claude-plugin/ found\n"
         )
 
     if importlib.util.find_spec("skillxray") is None:

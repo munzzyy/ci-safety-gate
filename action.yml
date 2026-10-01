@@ -41,7 +41,7 @@ inputs:
     default: "true"
 
   skillxray:
-    description: "Run skillxray over any SKILL.md / skills / .claude content in the repo."
+    description: "Run skillxray over any SKILL.md / skills / .claude / .claude-plugin content in the repo."
     required: false
     default: "true"
   skillxray-ref:
@@ -49,7 +49,7 @@ inputs:
     required: false
     default: "aef787dda4cdec000c5d200ec203d076dc75b6ff"
   skillxray-path:
-    description: "Path to scan. Leave empty to auto-detect SKILL.md / skills/ / .claude and skip cleanly if none exist."
+    description: "Path to scan. Leave empty to auto-detect SKILL.md / skills/ / .claude / .claude-plugin and skip cleanly if none exist."
     required: false
     default: ""
   skillxray-fail-on:
@@ -239,7 +239,8 @@ runs:
           # Captured rather than piped, so find's own exit status can't decide the match.
           hits="$(find -L "${{ github.workspace }}" -maxdepth 6 \
                \( -path '*/.git' -o -path '*/node_modules' \) -prune -o \
-               \( -type f -name 'SKILL.md' -o -type d -name 'skills' -o -type d -name '.claude' \) -print \
+               \( -type f -name 'SKILL.md' -o -type d -name 'skills' -o -type d -name '.claude' \
+                  -o -type d -name '.claude-plugin' \) -print \
                2>/dev/null || true)"
           if [ -n "$hits" ]; then
             target="${{ github.workspace }}"
@@ -290,7 +291,7 @@ runs:
         {
           echo "## skillxray (agent-skill scanner)"
           echo ""
-          echo "skipped: no SKILL.md, skills/, or .claude/ found"
+          echo "skipped: no SKILL.md, skills/, .claude/ or .claude-plugin/ found"
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Evaluate gate

@@ -55,12 +55,12 @@ def decide_check(name: str, enabled: bool, install_outcome: str | None, scan_out
 
 def decide_skillxray(enabled: bool, target: str, install_outcome: str, scan_outcome: str) -> CheckResult:
     """skillxray has a second, legitimate way to be "off": auto-detection
-    found no SKILL.md / skills/ / .claude to scan. That must stay a clean
+    found no SKILL.md / skills/ / .claude / .claude-plugin to scan. That must stay a clean
     skip -- the check isn't broken, there's just nothing to check."""
     if not enabled:
         return CheckResult("skillxray", "skipped", "disabled")
     if not target:
-        return CheckResult("skillxray", "skipped", "no SKILL.md/skills/.claude found")
+        return CheckResult("skillxray", "skipped", "no SKILL.md/skills/.claude/.claude-plugin found")
     return decide_check("skillxray", True, install_outcome, scan_outcome)
 
 

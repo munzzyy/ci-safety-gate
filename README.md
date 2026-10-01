@@ -33,8 +33,10 @@ name which no longer exists on PyPI, so the name is unclaimed and anyone can reg
   and a gate that reports a pass while a class of findings is suppressed is worse than no
   gate. Set `zizmor-persona: "regular"` for the quieter default.
 - **skillxray** scans `SKILL.md` files, Claude Code plugins, and MCP bundles for prompt
-  injection, hidden Unicode, dangerous commands, and leaked secrets. If your repo has none
-  of that, this step detects it and skips cleanly instead of failing on nothing to scan.
+  injection, hidden Unicode, dangerous commands, and leaked secrets. If your repo has no
+  `SKILL.md`, `skills/`, `.claude/` or `.claude-plugin/`, this step skips cleanly instead
+  of failing on nothing to scan. Point `skillxray-path` at anything else you want scanned,
+  an MCP bundle for one.
 - **checkout-safety** (bundled, `checkout_safety.py`, no dependency) reads your workflows
   for the two ways fork pull request code gets run in a privileged job: an explicit
   `allow-unsafe-pr-checkout`, and an `actions/checkout` pinned to a SHA or a pre-v7 exact

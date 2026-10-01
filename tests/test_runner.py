@@ -33,7 +33,7 @@ def _action_yml_find_hits(root) -> bool:
         f"hits=\"$(find -L {shlex.quote(str(root))} -maxdepth 6 "
         r"\( -path '*/.git' -o -path '*/node_modules' \) -prune -o "
         r"\( -type f -name 'SKILL.md' -o -type d -name 'skills' "
-        r"-o -type d -name '.claude' \) -print "
+        r"-o -type d -name '.claude' -o -type d -name '.claude-plugin' \) -print "
         "2>/dev/null || true)\"; [ -n \"$hits\" ]"
     )
     return subprocess.run(
@@ -58,6 +58,19 @@ def test_detect_finds_skills_directory(tmp_path):
 def test_detect_finds_dot_claude_directory(tmp_path):
     (tmp_path / ".claude").mkdir()
     assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
+
+
+def test_detect_finds_a_claude_code_plugin(tmp_path):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"name": "demo"}\n')
+    (tmp_path / "commands").mkdir()
+    (tmp_path / "commands" / "x.md").write_text("# x\n")
+    assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
+
+
+def test_detect_ignores_a_bare_plugin_json(tmp_path):
+    (tmp_path / "plugin.json").write_text('{"name": "demo"}\n')
+    assert runner.detect_skillxray_target(tmp_path) == ""
 
 
 def test_detect_returns_empty_when_nothing_matches(tmp_path):
@@ -104,6 +117,7 @@ def test_detect_find_pipeline_matches_action_yml():
         "-type f -name 'SKILL.md'",
         "-type d -name 'skills'",
         "-type d -name '.claude'",
+        "-type d -name '.claude-plugin'",
     ):
         assert token in block
     # -xtype is a GNU-only primary that errors out on BSD/macOS find (and,

@@ -92,6 +92,28 @@ def test_a_repo_with_no_skill_content_is_a_clean_skip(run_action_step, tmp_path)
     assert _detect(run_action_step, tmp_path, root) == "target=\n"
 
 
+def _plugin_repo(root, with_marker_dir=True):
+    root.mkdir()
+    (root / "commands").mkdir()
+    (root / "commands" / "deploy.md").write_text("# deploy\n", encoding="utf-8")
+    if with_marker_dir:
+        (root / ".claude-plugin").mkdir()
+        (root / ".claude-plugin" / "plugin.json").write_text('{"name": "demo"}\n', encoding="utf-8")
+    else:
+        (root / "plugin.json").write_text('{"name": "demo"}\n', encoding="utf-8")
+    return root
+
+
+def test_a_claude_code_plugin_is_detected(run_action_step, tmp_path):
+    root = _plugin_repo(tmp_path / "repo")
+    assert _detect(run_action_step, tmp_path, root) == f"target={root}\n"
+
+
+def test_a_bare_plugin_json_is_not_a_claude_plugin(run_action_step, tmp_path):
+    root = _plugin_repo(tmp_path / "repo", with_marker_dir=False)
+    assert _detect(run_action_step, tmp_path, root) == "target=\n"
+
+
 def test_an_explicit_skillxray_path_skips_detection(run_action_step, tmp_path):
     root = tmp_path / "repo"
     root.mkdir()

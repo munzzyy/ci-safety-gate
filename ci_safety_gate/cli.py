@@ -90,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
                     default=_default("skillxray-ref", "aef787dda4cdec000c5d200ec203d076dc75b6ff"),
                     help="commit of munzzyy/skillxray to install with --install-missing")
     p.add_argument("--skillxray-path", default=_default("skillxray-path", ""),
-                    help="path to scan (default: auto-detect SKILL.md / skills/ / .claude, "
+                    help="path to scan (default: auto-detect SKILL.md / skills/ / .claude / .claude-plugin, "
                          "skip cleanly if none exist)")
     p.add_argument("--skillxray-fail-on", default=_default("skillxray-fail-on", "high"),
                     choices=("critical", "high", "medium", "low", "none"),

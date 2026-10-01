@@ -27,6 +27,10 @@
   switched the check off and showed it as skipped. That check fails now, and
   the summary names the value. `secrets-fail-on-skip`, `secrets-annotations`
   and `zizmor-offline` ignore case now, so `"True"` works there too.
+- A Claude Code plugin repo (`.claude-plugin/`) had skillxray skipped and the
+  gate passed, because detection only looked for `SKILL.md`, `skills/` and
+  `.claude/`. A `.claude-plugin/` directory counts now, in the action and in
+  `--local`.
 
 ### Changed
 
