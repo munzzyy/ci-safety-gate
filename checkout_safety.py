@@ -45,14 +45,20 @@ _CHECKOUT_RE = re.compile(r"""uses:\s*['"]?actions/checkout@([^\s'"#]+)""", re.I
 _UNSAFE_INPUT_RE = re.compile(r"^\s*allow-unsafe-pr-checkout\s*:\s*(.+?)\s*$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _MAJOR_TAG_RE = re.compile(r"^v\d+$")
-_EXACT_TAG_RE = re.compile(r"^v\d+\.\d+(\.\d+)?$")
+_EXACT_TAG_RE = re.compile(r"^v(\d+)\.\d+(\.\d+)?$")
+# v7.0.0 shipped the refusal, so every exact tag from there on has it.
+_FIRST_SAFE_MAJOR = 7
 
 # A `ref:` that resolves to the pull request's own head is the difference
 # between "this job checked out my repo" and "this job ran the fork's
 # code". It is what the safe-by-default change exists to block.
-_PR_HEAD_HINTS = ("github.event.pull_request", "github.event.workflow_run",
-                  "head.sha", "head.ref", "head_sha", "head_branch", "head_ref",
-                  "github.event.number", "refs/pull/")
+_PR_HEAD_HINTS = ("github.event.pull_request.head", "head.sha", "head.ref",
+                  "head_sha", "head_branch", "head_ref", "merge_commit_sha",
+                  "github.event.number", "pull_request.number", "refs/pull/")
+# Any other workflow_run ref names the triggering run's code, unless it
+# asks for a base ref.
+_WORKFLOW_RUN_HINT = "github.event.workflow_run"
+_BASE_HINTS = (".base.", "base_ref")
 # A `repository:` naming the fork checks out fork code whatever the ref.
 _FORK_REPO_HINTS = ("head.repo", "head_repository")
 # `ref:` / `repository:` as a block key or inside a flow mapping.
@@ -159,10 +165,18 @@ def checks_out_pr_head(block: str) -> bool:
         for n, key in enumerate(keys):
             end = keys[n + 1].start() if n + 1 < len(keys) else len(text)
             value = text[key.end():end]
-            hints = _PR_HEAD_HINTS if key.group(1) == "ref" else _FORK_REPO_HINTS
-            if any(h in value for h in hints):
+            if key.group(1) == "repository":
+                if any(h in value for h in _FORK_REPO_HINTS):
+                    return True
+            elif _ref_is_pr_head(value):
                 return True
     return False
+
+
+def _ref_is_pr_head(value: str) -> bool:
+    if any(h in value for h in _PR_HEAD_HINTS):
+        return True
+    return _WORKFLOW_RUN_HINT in value and not any(b in value for b in _BASE_HINTS)
 
 
 def pin_kind(ref: str) -> str:
@@ -170,14 +184,16 @@ def pin_kind(ref: str) -> str:
 
     "sha" and "exact-tag" are the two the 2026-07-20 backport does not
     reach; "major-tag" and "moving" follow the action's default branch or
-    a tag its maintainers move, so they got the fix automatically.
+    a tag its maintainers move, so they got the fix automatically. "fixed"
+    is an exact tag from v7.0.0 on, which has the refusal built in.
     """
     if _SHA_RE.match(ref):
         return "sha"
     if _MAJOR_TAG_RE.match(ref):
         return "major-tag"
-    if _EXACT_TAG_RE.match(ref):
-        return "exact-tag"
+    exact = _EXACT_TAG_RE.match(ref)
+    if exact:
+        return "fixed" if int(exact.group(1)) >= _FIRST_SAFE_MAJOR else "exact-tag"
     return "moving"
 
 
@@ -205,12 +221,14 @@ def scan_text(rel_path: str, text: str) -> list[Finding]:
         return findings
 
     for i, line in enumerate(lines, start=1):
+        if line.lstrip().startswith("#"):
+            continue
         match = _CHECKOUT_RE.search(line)
         if not match:
             continue
         ref = match.group(1)
         kind = pin_kind(ref)
-        if kind in ("major-tag", "moving"):
+        if kind in ("major-tag", "moving", "fixed"):
             continue
         block = step_block(lines, i - 1)
         pr_head = checks_out_pr_head(block)

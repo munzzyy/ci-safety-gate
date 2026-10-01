@@ -365,3 +365,64 @@ def test_a_flow_mapping_ref_is_read(tmp_path, mapping):
     )})
     findings, _ = checkout_safety.scan(root)
     assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+
+
+# ---------------------------------------------------------------------------
+# Safe checkouts that used to fail the gate at the default threshold.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("ref", [
+    "${{ github.event.pull_request.base.sha }}",
+    "${{ github.base_ref }}",
+])
+def test_a_base_ref_checkout_is_not_a_pull_request_head(tmp_path, ref):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: {PIN}\n        with:\n          ref: {ref}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert [f.severity for f in findings if f.severity == "high"] == []
+    assert checkout_safety.main([str(root)]) == 0
+
+
+def test_a_merge_commit_checkout_is_still_a_high(tmp_path):
+    # The merge commit contains the fork's changes.
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: {PIN}\n        with:\n"
+        "          ref: ${{ github.event.pull_request.merge_commit_sha }}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+
+
+@pytest.mark.parametrize("tag", ["v7.0.1", "v7.1"])
+def test_an_exact_v7_tag_already_refuses_fork_code(tmp_path, tag):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: actions/checkout@{tag}\n        with:\n          ref: {HEAD_SHA}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert findings == []
+
+
+def test_a_commented_out_checkout_is_not_a_finding(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      # - uses: {PIN}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert findings == []
+
+
+@pytest.mark.parametrize("ref,severity", [
+    ("${{ github.event.workflow_run.head_commit.id }}", "high"),
+    ("${{ github.event.workflow_run.pull_requests[0].base.sha }}", "medium"),
+])
+def test_workflow_run_refs_count_as_the_head_unless_they_ask_for_a_base(tmp_path, ref, severity):
+    root = _repo(tmp_path, {"post.yml": _workflow(
+        "on:\n  workflow_run:\n    workflows: [ci]\n",
+        f"      - uses: {PIN}\n        with:\n          ref: {ref}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", severity)]

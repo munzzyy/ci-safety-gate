@@ -19,6 +19,10 @@
 - The secrets scan's OpenAI pattern missed any project key (`sk-proj-`) with
   a `-` or `_` early in its body, and never matched service account
   (`sk-svcacct-`) or admin (`sk-admin-`) keys.
+- checkout-safety counted a checkout of the base ref
+  (`github.event.pull_request.base.sha`) as a pull request head checkout, so
+  the standard safe pattern failed the gate. It also flagged exact tags from
+  v7.0.0 on, which shipped with the refusal, and commented-out `uses:` lines.
 
 ### Changed
 

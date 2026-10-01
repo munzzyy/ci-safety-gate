@@ -37,9 +37,9 @@ name which no longer exists on PyPI, so the name is unclaimed and anyone can reg
   of that, this step detects it and skips cleanly instead of failing on nothing to scan.
 - **checkout-safety** (bundled, `checkout_safety.py`, no dependency) reads your workflows
   for the two ways fork pull request code gets run in a privileged job: an explicit
-  `allow-unsafe-pr-checkout`, and an `actions/checkout` pinned to a SHA or an exact tag in
-  a `pull_request_target` or `workflow_run` workflow. See below for why the second one
-  matters.
+  `allow-unsafe-pr-checkout`, and an `actions/checkout` pinned to a SHA or a pre-v7 exact
+  tag in a `pull_request_target` or `workflow_run` workflow. See below for why the second
+  one matters.
 - **secrets** (bundled, `scan_secrets.py`, no dependency) greps the working tree for
   AWS access key IDs, GitHub and GitLab tokens, OpenAI/Anthropic/Stripe keys, and PEM
   private key blocks. Matched values are redacted before they ever hit the log.
@@ -57,11 +57,14 @@ tells you to do it two sections up, so the repos following the best advice are t
 still exposed. zizmor's `unpinned-uses` will never mention it either, because the pin is
 correct, it is just old.
 
-The check reports a SHA or exact-tag pin under one of those triggers as medium, and raises
-it to high when the same step also checks out the pull request head, which is the shape
-that actually runs fork code. A major tag (`@v7`) or a branch is never flagged: those moved
-with the fix. The default `checkout-safety-fail-on` is `high`, so a stale pin is reported
-without failing your build; set it to `medium` to enforce.
+The check reports a SHA pin, or an exact tag older than v7.0.0, under one of those triggers
+as medium. It raises that to high when the same step also checks out the pull request head,
+which is the shape that actually runs fork code: the head SHA or branch, the merge commit,
+a `refs/pull/` ref, or the fork as `repository:`. A checkout of the base ref stays medium.
+A major tag (`@v7`) or a branch is never flagged, since those moved with the fix, and
+neither is an exact tag from v7.0.0 on, since v7 shipped with it. The default
+`checkout-safety-fail-on` is `high`, so a stale pin is reported without failing your build;
+set it to `medium` to enforce.
 
 ## The secrets scan
 
