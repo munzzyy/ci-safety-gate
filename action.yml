@@ -1,8 +1,8 @@
 name: "CI Safety Gate"
 description: >-
-  One pass/fail gate that bundles a GitHub Actions security audit (zizmor),
-  an agent-skill scanner (skillxray), and a bundled secrets grep, with a
-  combined summary in the job.
+  One pass/fail gate over zizmor, skillxray, checkout-safety (unsafe fork
+  pull request checkouts) and a bundled secrets grep, with a combined summary
+  in the job.
 author: "Cole Munz"
 
 branding:

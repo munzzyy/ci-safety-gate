@@ -34,6 +34,11 @@
 
 ### Added
 
+- The secrets scan matches Slack, Google API, npm and Twilio keys.
+- A pre-commit hook (`.pre-commit-hooks.yaml`) that runs
+  `ci-safety-gate --local` on every commit.
+- `--json` for `ci-safety-gate --local`. It prints the verdict and the status
+  of each check as JSON.
 - checkout-safety follows reusable workflows in the same repo. One called
   from a `pull_request_target` or `workflow_run` workflow, directly or
   through another reusable workflow, is checked as if it had that trigger,
@@ -42,6 +47,10 @@
 ### Changed
 
 - Relicensed to GPL-3.0-or-later. Releases up to v0.1.1 were under MIT.
+- SECURITY.md left out checkout-safety and the README counted eight secrets
+  patterns where the scan has twelve. Both name everything now. The usage
+  examples pin `actions/checkout` v7.0.1 instead of v5.0.1, the same pin as
+  the CI here.
 
 ## 0.1.1
 

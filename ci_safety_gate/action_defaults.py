@@ -9,7 +9,7 @@ function needs is parsed out of the real action.yml at import time, so a
 version bump or a threshold change in action.yml is picked up here for
 free. What can't be avoided without rewriting the composite action into
 something that calls Python instead of inline bash is the *flag spelling*
-(`--no-config`, `--min-severity`, ...) -- checks.py owns a second copy of
+(`--min-severity`, `--fail-on`, ...) -- checks.py owns a second copy of
 those, and tests/test_checks.py asserts each one is still literally present
 in the corresponding action.yml step's `run:` block, so a flag renamed in
 one place and not the other fails CI instead of drifting quietly.

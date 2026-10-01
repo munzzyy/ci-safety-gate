@@ -14,7 +14,7 @@ one bad finding anywhere fails the whole gate.
 ## Usage
 
 ```yaml
-- uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 - uses: munzzyy/ci-safety-gate@v0.1.1
 ```
 
@@ -43,8 +43,9 @@ name which no longer exists on PyPI, so the name is unclaimed and anyone can reg
   tag in a `pull_request_target` or `workflow_run` workflow. See below for why the second
   one matters.
 - **secrets** (bundled, `scan_secrets.py`, no dependency) greps the working tree for
-  AWS access key IDs, GitHub and GitLab tokens, OpenAI/Anthropic/Stripe keys, and PEM
-  private key blocks. Matched values are redacted before they ever hit the log.
+  AWS access key IDs, GitHub and GitLab tokens, OpenAI, Anthropic, Stripe, Slack, Google,
+  npm and Twilio keys, and PEM private key blocks. Matched values are redacted before they
+  ever hit the log.
 
 ## The checkout-safety check
 
@@ -142,12 +143,16 @@ ci-safety-gate --local
 `--local` runs the same commands action.yml's composite steps run against a directory you
 point it at (default `.`), hands the result to the same `evaluate_gate.py` the action
 itself calls, and prints the same combined summary to your terminal instead of
-`$GITHUB_STEP_SUMMARY`. Same verdict, same exit code.
+`$GITHUB_STEP_SUMMARY`. Same verdict, same exit code. Add `--json` to get the verdict and
+each check's status as one line of JSON instead, for a script that wants to branch on a
+single check.
 
-Every `action.yml` input has a matching flag: `--no-zizmor`, `--zizmor-min-severity`,
-`--secrets-exclude`, and so on. Run `ci-safety-gate --help` for the full list. Defaults come
-straight out of `action.yml` at run time rather than a hand-copied second set, so a version
-bump or threshold change there shows up here for free.
+Nearly every `action.yml` input has a matching flag: `--no-zizmor`, `--zizmor-min-severity`,
+`--secrets-exclude`, and so on. Run `ci-safety-gate --help` for the full list. Two have no
+flag: `python-version`, since `--local` runs on whatever Python you start it with, and
+`secrets-annotations`, since annotations only mean something in a GitHub job log. Defaults
+come out of `action.yml` (or the generated copy an installed package carries) rather than a
+hand-copied second set, so a version bump or threshold change there shows up here for free.
 
 A scanner that isn't installed fails loud instead of skipping quietly:
 
@@ -211,16 +216,15 @@ The hook runs `ci-safety-gate --local` and picks up whatever flags you pass it w
   tools is whatever zizmor and skillxray ship; this action just installs them, runs them
   the same way every time, and merges the output. A finding a bundled tool misses, this
   gate misses too.
-- skillxray installs from a pinned commit of `munzzyy/skillxray`, not from PyPI, because it
-  isn't published there yet. It is pinned by full SHA rather than by tag, since a tag can be
-  moved. Point `skillxray-ref` at a newer commit when there is one, or drop this once it's
-  on PyPI.
+- skillxray installs from a pinned commit of `munzzyy/skillxray` because it isn't on PyPI
+  yet. The pin is a full SHA rather than a tag, since a tag can be moved. Point
+  `skillxray-ref` at a newer commit when there is one, or drop this once it's on PyPI.
 - zizmor is installed with a `>=1.28.0` floor rather than an exact pin, so a fix in zizmor
   reaches you without waiting on a release here. 1.28.0 is the first version without
   GHSA-f42p-wjw5-97qh. Pin it harder with `zizmor-version` if you'd rather.
-- The bundled secrets scan is deliberately small: eight high-precision patterns, no entropy
-  analysis, no git-history scan. It's a floor, not a replacement for gitleaks or a real
-  secret manager.
+- The bundled secrets scan is deliberately small: the high-precision patterns listed
+  above, no entropy analysis, no git-history scan. It's a floor, not a replacement for
+  gitleaks or a real secret manager.
 - The checkout-safety check reads YAML with regexes, not a parser, to hold the
   zero-dependency floor. It reads the shapes people actually write; a workflow that nests
   its triggers in some exotic way could slip past it.
