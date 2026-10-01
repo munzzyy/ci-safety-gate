@@ -45,3 +45,23 @@ def test_step_blocks_cover_every_named_step():
                  "skillxray", "Evaluate gate"):
         assert name in blocks
         assert blocks[name].strip() != ""
+
+
+def test_packaged_defaults_match_action_yml():
+    # An installed copy reads the packaged file, a checkout reads action.yml.
+    # Regenerate with:
+    #   python3 -m ci_safety_gate.action_defaults > ci_safety_gate/_action_defaults.json
+    parsed = action_defaults.parse_input_defaults(action_defaults.read_action_yml_text())
+    assert action_defaults.packaged_defaults() == parsed
+
+
+def test_input_defaults_fall_back_to_the_packaged_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(action_defaults, "_ACTION_YML", tmp_path / "action.yml")
+    action_defaults.read_action_yml_text.cache_clear()
+    action_defaults.input_defaults.cache_clear()
+    try:
+        assert action_defaults.input_defaults() == action_defaults.packaged_defaults()
+        assert action_defaults.default("skillxray-ref") == "aef787dda4cdec000c5d200ec203d076dc75b6ff"
+    finally:
+        action_defaults.read_action_yml_text.cache_clear()
+        action_defaults.input_defaults.cache_clear()

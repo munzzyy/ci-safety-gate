@@ -5,6 +5,11 @@
 ### Fixed
 
 - Hardened skill-content detection.
+- The installed CLI, which is what the pre-commit hook runs, crashed with a
+  `KeyError` in any repo with its own `action.yml`, because it read that file
+  as if it were ours. Everywhere else it fell back to hand-copied defaults,
+  one of which installed skillxray from a movable tag. The defaults now ship
+  inside the package, and a repo's own `action.yml` is never read.
 
 ### Changed
 

@@ -36,5 +36,8 @@ py-modules = ["evaluate_gate", "scan_secrets", "checkout_safety"]
 [tool.setuptools.packages.find]
 include = ["ci_safety_gate*"]
 
+[tool.setuptools.package-data]
+ci_safety_gate = ["_action_defaults.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

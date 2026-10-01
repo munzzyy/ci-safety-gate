@@ -48,7 +48,14 @@ If you change a flag or default a check runs (zizmor or skillxray), update it in
 `action.yml`'s bash and `ci_safety_gate/checks.py`. `tests/test_checks.py` asserts the two
 still match, so a real drift fails CI rather than shipping quietly. Defaults themselves
 (versions, globs, thresholds) only live in `action.yml`; `ci_safety_gate/action_defaults.py`
-reads them from there at run time, so there's no second copy of those to keep in sync by hand.
+reads them from there at run time. An installed copy has no `action.yml`, so the package also
+ships `ci_safety_gate/_action_defaults.json`. After changing a default, regenerate it:
+
+```
+python3 -m ci_safety_gate.action_defaults > ci_safety_gate/_action_defaults.json
+```
+
+`tests/test_action_defaults.py` fails until the two match.
 
 ## License
 

@@ -22,13 +22,12 @@ from . import __version__, action_defaults, runner
 
 
 def _default(name: str, fallback: str) -> str:
-    """action_defaults.default() straight from action.yml when it's found
-    (a checkout or an editable install); a fixed fallback only so --help
-    still renders something sane if it isn't (see action_defaults.py's
-    docstring on why that can happen)."""
+    """action.yml's default for one input (see action_defaults.py). The
+    fallback only covers a broken install, so --help still renders;
+    tests/test_cli_local.py holds every fallback equal to action.yml."""
     try:
         return action_defaults.default(name)
-    except action_defaults.ActionYamlNotFound:
+    except (action_defaults.ActionYamlNotFound, KeyError):
         return fallback
 
 
@@ -87,8 +86,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "offline is the default, same as action.yml")
 
     p.add_argument("--no-skillxray", action="store_true", help="skip skillxray")
-    p.add_argument("--skillxray-ref", default=_default("skillxray-ref", "v0.1.1"),
-                    help="git tag of munzzyy/skillxray to install with --install-missing")
+    p.add_argument("--skillxray-ref",
+                    default=_default("skillxray-ref", "aef787dda4cdec000c5d200ec203d076dc75b6ff"),
+                    help="commit of munzzyy/skillxray to install with --install-missing")
     p.add_argument("--skillxray-path", default=_default("skillxray-path", ""),
                     help="path to scan (default: auto-detect SKILL.md / skills/ / .claude, "
                          "skip cleanly if none exist)")

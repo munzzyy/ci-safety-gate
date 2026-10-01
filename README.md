@@ -159,20 +159,26 @@ about a failure before it's a red PR instead of after:
     rev: main  # pin to a tag once one exists
     hooks:
     -   id: ci-safety-gate
+        additional_dependencies: ["zizmor>=1.28.0"]
 ```
 
-pre-commit clones this repo and installs it into its own hook environment, which is
-exactly the checkout `--local` needs to find `action.yml` (see Known limitations below),
-so there's nothing extra to set up. The hook runs `ci-safety-gate --local` and picks up
-whatever flags you pass it with `args:`.
+pre-commit installs the package into its own hook environment, and the gate's defaults ship
+inside the package, so the hook runs with the same thresholds and pins as the action. The
+scanners are not package dependencies, though. zizmor goes in `additional_dependencies` as
+above, and a repo with skill or plugin content also needs skillxray at the pinned commit,
+`"git+https://github.com/munzzyy/skillxray@aef787dda4cdec000c5d200ec203d076dc75b6ff"`. Or
+leave both out and set `args: [--install-missing]`, which runs the same `pip install` the
+action does. A scanner that is still missing fails the hook rather than passing it.
+
+The hook runs `ci-safety-gate --local` and picks up whatever flags you pass it with `args:`.
 
 ### Known limitations
 
-- `--local` only works from a checkout of this repo (`git clone` + `pip install -e .`), since
-  it reads its defaults straight out of the real `action.yml` on disk instead of a bundled
-  copy. A real, non-editable PyPI wheel would need `action.yml` shipped as package data for
-  this to keep working. That is a follow-up for whenever this package is actually published,
-  not solved yet.
+- From a checkout, `--local` reads its defaults straight out of `action.yml`. An installed
+  copy (the pre-commit hook, or any non-editable `pip install`) has no `action.yml` next to
+  it, so it reads `ci_safety_gate/_action_defaults.json`, a generated copy a test holds
+  equal to `action.yml`. Either way it never reads an `action.yml` from the repo you point
+  it at.
 - The flags mirror `action.yml`'s inputs, but the literal commands each check runs
   (`ci_safety_gate/checks.py`) are still a second, hand-written copy of the bash in
   `action.yml`. Rewriting the composite action to call into this package would close that

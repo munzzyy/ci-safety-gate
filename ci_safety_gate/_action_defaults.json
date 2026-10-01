@@ -1,0 +1,22 @@
+{
+  "checkout-safety": "true",
+  "checkout-safety-fail-on": "high",
+  "checkout-safety-path": ".",
+  "python-version": "3.12",
+  "secrets": "true",
+  "secrets-annotations": "true",
+  "secrets-exclude": "",
+  "secrets-fail-on-skip": "false",
+  "secrets-max-bytes": "2000000",
+  "secrets-path": ".",
+  "skillxray": "true",
+  "skillxray-fail-on": "high",
+  "skillxray-path": "",
+  "skillxray-ref": "aef787dda4cdec000c5d200ec203d076dc75b6ff",
+  "zizmor": "true",
+  "zizmor-min-severity": "medium",
+  "zizmor-offline": "true",
+  "zizmor-path": ".",
+  "zizmor-persona": "auditor",
+  "zizmor-version": ">=1.28.0"
+}

@@ -16,7 +16,9 @@ import json
 import shutil
 import subprocess
 
-from ci_safety_gate import cli
+import pytest
+
+from ci_safety_gate import action_defaults, cli
 
 
 def _init_git_repo(root, files: dict[str, str]) -> None:
@@ -196,3 +198,49 @@ def test_local_checkout_safety_can_be_turned_off(tmp_path, capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert "checkout-safety: skipped (disabled)" in out
+
+
+@pytest.fixture
+def installed_layout(tmp_path, monkeypatch):
+    """No action.yml next to the package, the way pre-commit installs it."""
+    monkeypatch.setattr(action_defaults, "_ACTION_YML", tmp_path / "no-such" / "action.yml")
+    action_defaults.read_action_yml_text.cache_clear()
+    action_defaults.input_defaults.cache_clear()
+    yield
+    action_defaults.read_action_yml_text.cache_clear()
+    action_defaults.input_defaults.cache_clear()
+
+
+def test_installed_cli_ignores_an_action_yml_in_the_current_directory(
+        tmp_path, monkeypatch, installed_layout, capsys):
+    # Someone who writes GitHub Actions runs the hook in a repo with its own
+    # action.yml. Its inputs are not ours and must never become defaults.
+    repo = tmp_path / "their-action"
+    _init_git_repo(repo, {
+        "action.yml": (
+            'name: x\ninputs:\n  token:\n    description: "t"\n    default: "abc"\n'
+            "runs:\n  using: node20\n  main: x.js\n"
+        ),
+    })
+    monkeypatch.chdir(repo)
+
+    assert action_defaults.input_defaults() == action_defaults.packaged_defaults()
+    args = cli.build_parser().parse_args(["--local"])
+    assert args.skillxray_ref == action_defaults.packaged_defaults()["skillxray-ref"]
+    assert args.secrets_path == "."
+
+    code = cli.main(["--local", ".", "--no-zizmor", "--no-skillxray"])
+    assert code == 0
+    assert "**ci-safety-gate: PASS**" in capsys.readouterr().out
+
+
+def test_cli_fallbacks_match_action_yml(monkeypatch):
+    # The fallbacks only render when no defaults source is found, but a
+    # stale one there would quietly install something else.
+    real = vars(cli.build_parser().parse_args(["--local"]))
+
+    def missing(name):
+        raise action_defaults.ActionYamlNotFound("simulated broken install")
+
+    monkeypatch.setattr(action_defaults, "default", missing)
+    assert vars(cli.build_parser().parse_args(["--local"])) == real
