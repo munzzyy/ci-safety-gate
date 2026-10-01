@@ -25,17 +25,20 @@ from ci_safety_gate import action_defaults, runner
 
 def _action_yml_find_hits(root) -> bool:
     """Run the exact find pipeline action.yml's "Detect skill-shaped
-    content" step uses, so the port can be checked against real find rather
-    than a paraphrase of it. test_detect_find_pipeline_matches_action_yml
-    guards the hardcoded predicate below against drift from action.yml."""
+    content" step uses, under the shell flags GitHub runs it with, so the
+    port can be checked against real find rather than a paraphrase of it.
+    test_detect_find_pipeline_matches_action_yml guards the hardcoded
+    predicate below against drift from action.yml."""
     cmd = (
-        f"find -L {shlex.quote(str(root))} -maxdepth 6 "
+        f"hits=\"$(find -L {shlex.quote(str(root))} -maxdepth 6 "
         r"\( -path '*/.git' -o -path '*/node_modules' \) -prune -o "
         r"\( -type f -name 'SKILL.md' -o -type d -name 'skills' "
         r"-o -type d -name '.claude' \) -print "
-        "2>/dev/null | grep -q ."
+        "2>/dev/null || true)\"; [ -n \"$hits\" ]"
     )
-    return subprocess.run(["bash", "-c", cmd]).returncode == 0
+    return subprocess.run(
+        ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", cmd]
+    ).returncode == 0
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +109,9 @@ def test_detect_find_pipeline_matches_action_yml():
     # -xtype is a GNU-only primary that errors out on BSD/macOS find (and,
     # combined with -type f, missed a symlinked SKILL.md). It must be gone.
     assert "-xtype" not in block
+    assert '2>/dev/null || true)"' in block
+    assert '[ -n "$hits" ]' in block
+    assert "grep -q" not in block
 
 
 @pytest.mark.skipif(
@@ -142,6 +148,27 @@ def test_detect_symlinked_skill_md_is_a_hit_in_both_engines(tmp_path):
         os.symlink("actual.md", tmp_path / "SKILL.md")
     except (OSError, NotImplementedError):
         pytest.skip("platform does not allow creating symlinks without elevated privilege")
+
+    assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
+    assert _action_yml_find_hits(tmp_path) is True
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="_action_yml_find_hits runs a POSIX find pipeline; the action runs on Linux runners",
+)
+@pytest.mark.parametrize("layout", ["symlink_loop", "many_skills"])
+def test_detect_agrees_with_the_action_on_hard_layouts(tmp_path, layout):
+    if layout == "symlink_loop":
+        (tmp_path / "SKILL.md").write_text("# skill\n")
+        try:
+            os.symlink(".", tmp_path / "loop")
+        except (OSError, NotImplementedError):
+            pytest.skip("platform does not allow creating symlinks without elevated privilege")
+    else:
+        for n in range(300):
+            (tmp_path / "skills" / f"s{n}").mkdir(parents=True)
+            (tmp_path / "skills" / f"s{n}" / "SKILL.md").write_text("# skill\n")
 
     assert runner.detect_skillxray_target(tmp_path) == str(tmp_path)
     assert _action_yml_find_hits(tmp_path) is True
