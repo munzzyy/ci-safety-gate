@@ -238,6 +238,19 @@ The action's own `result` output is `"pass"` or `"fail"`. The job step itself ex
 on `"fail"`, which is what actually fails your workflow; the output exists for a caller that
 wants to branch on it instead.
 
+## Roadmap
+
+What is left needs a release or a decision. More code in this repo will not do it.
+
+- A release. Everything under Unreleased in the [changelog](CHANGELOG.md) is on `main`
+  only. `@v0.1.1` has none of it, the pre-commit hook included, so the hook example above
+  says `rev: main` for now. The live run on munzzyy/munzzyy still pins a commit from before
+  v0.1.1 and moves to the new tag too.
+- A call on macOS and Windows runners. The unit tests run on all three, but the action's
+  own bash has only ever run on `ubuntu-latest` (see Known limitations). Either the
+  integration job gets a macOS and Windows matrix and goes green there, or the action says
+  Linux only.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Every `${{ }}` expression that touches repo content
