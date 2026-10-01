@@ -40,7 +40,8 @@ FAIL_ON_CHOICES = SEVERITIES + ("none",)
 # one dangerous. Every other trigger is out of scope for this check.
 RISKY_TRIGGERS = ("pull_request_target", "workflow_run")
 
-_CHECKOUT_RE = re.compile(r"""uses:\s*['"]?actions/checkout@([^\s'"#]+)""")
+# GitHub resolves owner/repo in `uses:` without regard to case.
+_CHECKOUT_RE = re.compile(r"""uses:\s*['"]?actions/checkout@([^\s'"#]+)""", re.IGNORECASE)
 _UNSAFE_INPUT_RE = re.compile(r"^\s*allow-unsafe-pr-checkout\s*:\s*(.+?)\s*$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _MAJOR_TAG_RE = re.compile(r"^v\d+$")
@@ -50,7 +51,12 @@ _EXACT_TAG_RE = re.compile(r"^v\d+\.\d+(\.\d+)?$")
 # between "this job checked out my repo" and "this job ran the fork's
 # code". It is what the safe-by-default change exists to block.
 _PR_HEAD_HINTS = ("github.event.pull_request", "github.event.workflow_run",
-                  "head.sha", "head.ref", "head_sha", "head_branch")
+                  "head.sha", "head.ref", "head_sha", "head_branch", "head_ref",
+                  "github.event.number", "refs/pull/")
+# A `repository:` naming the fork checks out fork code whatever the ref.
+_FORK_REPO_HINTS = ("head.repo", "head_repository")
+# `ref:` / `repository:` as a block key or inside a flow mapping.
+_CHECKOUT_INPUT_RE = re.compile(r"(?:^|[\s{,])(ref|repository)\s*:")
 
 
 @dataclass(frozen=True)
@@ -82,25 +88,36 @@ def workflow_files(root: Path) -> list[Path]:
     return sorted(found)
 
 
+def _strip_comment(line: str) -> str:
+    if line.lstrip().startswith("#"):
+        return ""
+    return re.sub(r"\s+#.*$", "", line)
+
+
 def trigger_block(lines: list[str]) -> str:
     """The text of the workflow's `on:` block, inline or indented form.
 
     A regex reader rather than a YAML parse, for the same reason
     action_defaults.py is one: this package holds a zero-dependency floor.
     It only has to answer one question, and it answers it conservatively.
+    Comments are dropped, and neither a comment nor a block sequence at
+    column 0 (`- pull_request_target`, valid YAML) ends the block.
     """
     for i, line in enumerate(lines):
         match = re.match(r"^(?:on|['\"]on['\"]|true)\s*:(.*)$", line)
         if not match:
             continue
-        rest = match.group(1).strip()
-        if rest and not rest.startswith("#"):
+        rest = _strip_comment(match.group(1)).strip()
+        if rest:
             return rest  # on: [push, pull_request_target]
         block = []
         for follow in lines[i + 1:]:
-            if follow.strip() and not follow.startswith((" ", "\t")):
+            text = _strip_comment(follow)
+            if not text.strip():
+                continue
+            if not (text.startswith((" ", "\t")) or re.match(r"-(\s|$)", text)):
                 break
-            block.append(follow)
+            block.append(text)
         return "\n".join(block)
     return ""
 
@@ -137,8 +154,14 @@ def step_block(lines: list[str], index: int) -> str:
 
 def checks_out_pr_head(block: str) -> bool:
     for line in block.splitlines():
-        if re.match(r"^\s*ref\s*:", line) and any(h in line for h in _PR_HEAD_HINTS):
-            return True
+        text = _strip_comment(line)
+        keys = list(_CHECKOUT_INPUT_RE.finditer(text))
+        for n, key in enumerate(keys):
+            end = keys[n + 1].start() if n + 1 < len(keys) else len(text)
+            value = text[key.end():end]
+            hints = _PR_HEAD_HINTS if key.group(1) == "ref" else _FORK_REPO_HINTS
+            if any(h in value for h in hints):
+                return True
     return False
 
 

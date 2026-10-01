@@ -10,6 +10,12 @@
   as if it were ours. Everywhere else it fell back to hand-copied defaults,
   one of which installed skillxray from a movable tag. The defaults now ship
   inside the package, and a repo's own `action.yml` is never read.
+- checkout-safety lost a `pull_request_target` trigger that came after a
+  comment at column 0, or that was written as a list at column 0
+  (`- pull_request_target`). It rated several pull request head checkouts
+  only medium, which passes at the default threshold: `github.head_ref` with
+  the fork as `repository:`, `refs/pull/<number>/merge`, and a `ref:` inside a
+  flow mapping. It also skipped `uses: Actions/Checkout@...` over the case.
 
 ### Changed
 

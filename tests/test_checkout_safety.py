@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 import checkout_safety
 
 
@@ -262,3 +264,104 @@ def test_no_eval_or_exec_used_in_module_source():
     assert "eval(" not in source
     assert "exec(" not in source
     assert "shell=True" not in source
+
+
+# ---------------------------------------------------------------------------
+# Shapes that used to hide a pull_request_target checkout entirely, or rate
+# the pwn-request shape only medium (which passes at the default fail-on).
+# ---------------------------------------------------------------------------
+
+PIN = "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd"
+HEAD_SHA = "${{ github.event.pull_request.head.sha }}"
+
+
+def _workflow(on_block: str, step: str) -> str:
+    return (
+        "name: build\n"
+        f"{on_block}"
+        "jobs:\n"
+        "  build:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    steps:\n"
+        f"{step}"
+        "      - run: npm test\n"
+    )
+
+
+HEAD_CHECKOUT = f"      - uses: {PIN}\n        with:\n          ref: {HEAD_SHA}\n"
+
+
+def _stale_pins(findings):
+    return [(f.rule, f.severity) for f in findings]
+
+
+def test_a_column_zero_comment_does_not_end_the_trigger_block(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  push:\n# fork PRs need the label job too\n  pull_request_target:\n",
+        HEAD_CHECKOUT,
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+    assert checkout_safety.main([str(root)]) == 1
+
+
+def test_a_column_zero_trigger_list_is_read(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n- push\n- pull_request_target\n", HEAD_CHECKOUT,
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+    assert checkout_safety.main([str(root)]) == 1
+
+
+def test_a_commented_out_trigger_does_not_count(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  push:\n# pull_request_target:\n  pull_request:\n", HEAD_CHECKOUT,
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert findings == []
+
+
+def test_head_ref_from_the_fork_repository_is_a_high(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: {PIN}\n"
+        "        with:\n"
+        "          repository: ${{ github.event.pull_request.head.repo.full_name }}\n"
+        "          ref: ${{ github.head_ref }}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+
+
+def test_a_refs_pull_merge_ref_is_a_high(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: {PIN}\n"
+        "        with:\n"
+        "          ref: refs/pull/${{ github.event.number }}/merge\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
+
+
+def test_mixed_case_uses_is_still_a_checkout(tmp_path):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        "      - uses: Actions/Checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert [f.rule for f in findings] == ["stale-checkout-pin"]
+
+
+@pytest.mark.parametrize("mapping", [
+    f'{{ref: "{HEAD_SHA}"}}',
+    f'{{repository: owner/repo, ref: "{HEAD_SHA}"}}',
+])
+def test_a_flow_mapping_ref_is_read(tmp_path, mapping):
+    root = _repo(tmp_path, {"build.yml": _workflow(
+        "on:\n  pull_request_target:\n",
+        f"      - uses: {PIN}\n        with: {mapping}\n",
+    )})
+    findings, _ = checkout_safety.scan(root)
+    assert _stale_pins(findings) == [("stale-checkout-pin", "high")]
