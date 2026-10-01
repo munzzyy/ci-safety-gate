@@ -229,6 +229,7 @@ def test_summary_omits_setup_python_note_when_it_succeeded():
 
 _ALL_CLEAN_ENV = {
     "INPUTS_SECRETS": "true", "STEPS_SECRETS_OUTCOME": "success",
+    "INPUTS_CHECKOUT_SAFETY": "true", "STEPS_CHECKOUT_SAFETY_OUTCOME": "success",
     "INPUTS_ZIZMOR": "true", "STEPS_INSTALL_ZIZMOR_OUTCOME": "success", "STEPS_ZIZMOR_OUTCOME": "success",
     "INPUTS_SKILLXRAY": "true", "STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET": "/repo",
     "STEPS_INSTALL_SKILLXRAY_OUTCOME": "success", "STEPS_SKILLXRAY_OUTCOME": "success",
@@ -311,3 +312,49 @@ def test_disabled_checkout_safety_is_skipped_not_failed():
     assert passed is True
     check = next(r for r in results if r.name == "checkout-safety")
     assert check.status == "skipped"
+
+
+# ---------------------------------------------------------------------------
+# A check's on/off input must be true or false. Anything else used to read
+# as "disabled" and render as a quiet skip.
+# ---------------------------------------------------------------------------
+
+def _run_main(tmp_path, monkeypatch, overrides):
+    _set_env(monkeypatch, overrides)
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output.txt"))
+    code = evaluate_gate.main()
+    return code, summary.read_text(encoding="utf-8")
+
+
+def test_a_toggle_typo_fails_the_check_and_names_the_value(tmp_path, monkeypatch):
+    code, text = _run_main(tmp_path, monkeypatch, {
+        "INPUTS_SECRETS": "yes", "STEPS_SECRETS_OUTCOME": "skipped",
+    })
+    assert code == 1
+    assert "- secrets: FAIL" in text
+    assert "'yes'" in text
+    assert "**ci-safety-gate: FAIL**" in text
+
+
+def test_an_empty_toggle_fails_the_check(tmp_path, monkeypatch):
+    code, text = _run_main(tmp_path, monkeypatch, {"INPUTS_SKILLXRAY": ""})
+    assert code == 1
+    assert "- skillxray: FAIL" in text
+
+
+def test_a_capitalised_true_counts_as_enabled(tmp_path, monkeypatch):
+    code, text = _run_main(tmp_path, monkeypatch, {
+        "INPUTS_ZIZMOR": "True", "STEPS_ZIZMOR_OUTCOME": "failure",
+    })
+    assert code == 1
+    assert "- zizmor: FAIL (found an issue)" in text
+
+
+def test_an_uppercase_false_counts_as_disabled(tmp_path, monkeypatch):
+    code, text = _run_main(tmp_path, monkeypatch, {
+        "INPUTS_CHECKOUT_SAFETY": " FALSE ", "STEPS_CHECKOUT_SAFETY_OUTCOME": "skipped",
+    })
+    assert code == 0
+    assert "- checkout-safety: skipped (disabled)" in text

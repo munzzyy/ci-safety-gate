@@ -116,26 +116,51 @@ def _env(name: str) -> str:
     return os.environ.get(name, "")
 
 
-def _env_bool(name: str) -> bool:
-    return _env(name).strip().lower() == "true"
+# Each check's on/off input, by the name its CheckResult carries.
+_TOGGLE_ENV = {
+    "secrets": "INPUTS_SECRETS",
+    "checkout-safety": "INPUTS_CHECKOUT_SAFETY",
+    "zizmor": "INPUTS_ZIZMOR",
+    "skillxray": "INPUTS_SKILLXRAY",
+}
+
+
+def parse_toggle(raw: str) -> bool | None:
+    """True or False for "true"/"false" in any case, None for anything else."""
+    value = raw.strip().lower()
+    if value in ("true", "false"):
+        return value == "true"
+    return None
 
 
 def main() -> int:
     """No CLI arguments -- everything comes from the environment, the same
-    way the action step this replaces read `${{ }}` values through `env:`."""
-    results, passed = evaluate(
-        secrets_enabled=_env_bool("INPUTS_SECRETS"),
+    way the action step this replaces read `${{ }}` values through `env:`.
+
+    A toggle that is neither true nor false fails its check instead of
+    reading as disabled, so a typo like `secrets: "yes"` can't quietly
+    switch a check off."""
+    toggles = {name: parse_toggle(_env(var)) for name, var in _TOGGLE_ENV.items()}
+    results, _ = evaluate(
+        secrets_enabled=toggles["secrets"] is True,
         secrets_outcome=_env("STEPS_SECRETS_OUTCOME"),
-        checkout_safety_enabled=_env_bool("INPUTS_CHECKOUT_SAFETY"),
+        checkout_safety_enabled=toggles["checkout-safety"] is True,
         checkout_safety_outcome=_env("STEPS_CHECKOUT_SAFETY_OUTCOME"),
-        zizmor_enabled=_env_bool("INPUTS_ZIZMOR"),
+        zizmor_enabled=toggles["zizmor"] is True,
         install_zizmor_outcome=_env("STEPS_INSTALL_ZIZMOR_OUTCOME"),
         zizmor_outcome=_env("STEPS_ZIZMOR_OUTCOME"),
-        skillxray_enabled=_env_bool("INPUTS_SKILLXRAY"),
+        skillxray_enabled=toggles["skillxray"] is True,
         skillxray_target=_env("STEPS_SKILLXRAY_DETECT_OUTPUTS_TARGET"),
         install_skillxray_outcome=_env("STEPS_INSTALL_SKILLXRAY_OUTCOME"),
         skillxray_outcome=_env("STEPS_SKILLXRAY_OUTCOME"),
     )
+    results = [
+        CheckResult(r.name, "fail",
+                    f'input {r.name} is {_env(_TOGGLE_ENV[r.name])!r}, expected "true" or "false"')
+        if toggles[r.name] is None else r
+        for r in results
+    ]
+    passed = not any(r.status == "fail" for r in results)
     summary = render_summary(results, passed, setup_python_outcome=_env("STEPS_SETUP_PYTHON_OUTCOME"))
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")

@@ -139,12 +139,13 @@ runs:
           done
         fi
         set +f
-        if [ "${INPUTS_SECRETS_FAIL_ON_SKIP}" = "true" ]; then
-          args+=(--fail-on-skip)
-        fi
-        if [ "${INPUTS_SECRETS_ANNOTATIONS}" = "true" ]; then
-          args+=(--github-annotations)
-        fi
+        # case patterns keep this working on bash 3.2, still macOS's /bin/bash.
+        case "${INPUTS_SECRETS_FAIL_ON_SKIP}" in
+          [Tt][Rr][Uu][Ee]) args+=(--fail-on-skip) ;;
+        esac
+        case "${INPUTS_SECRETS_ANNOTATIONS}" in
+          [Tt][Rr][Uu][Ee]) args+=(--github-annotations) ;;
+        esac
         # Only stdout is redirected into the summary. The annotations go to
         # stderr precisely so they stay in the job log, where the runner
         # reads workflow commands; a ::error line written into a markdown
@@ -198,9 +199,9 @@ runs:
         set +e
         out="$RUNNER_TEMP/zizmor.out"
         offline_flag=""
-        if [ "${INPUTS_ZIZMOR_OFFLINE}" = "true" ]; then
-          offline_flag="--offline"
-        fi
+        case "${INPUTS_ZIZMOR_OFFLINE}" in
+          [Tt][Rr][Uu][Ee]) offline_flag="--offline" ;;
+        esac
         zizmor --no-progress --color never $offline_flag \
           --persona "${INPUTS_ZIZMOR_PERSONA}" \
           --min-severity "${INPUTS_ZIZMOR_MIN_SEVERITY}" \

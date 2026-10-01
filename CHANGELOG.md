@@ -23,6 +23,10 @@
   (`github.event.pull_request.base.sha`) as a pull request head checkout, so
   the standard safe pattern failed the gate. It also flagged exact tags from
   v7.0.0 on, which shipped with the refusal, and commented-out `uses:` lines.
+- A check toggle that was neither `true` nor `false`, like `secrets: "yes"`,
+  switched the check off and showed it as skipped. That check fails now, and
+  the summary names the value. `secrets-fail-on-skip`, `secrets-annotations`
+  and `zizmor-offline` ignore case now, so `"True"` works there too.
 
 ### Changed
 

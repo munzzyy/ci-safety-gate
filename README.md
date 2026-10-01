@@ -102,6 +102,9 @@ Every check is its own input, `"true"` by default:
 Full input list is in [`action.yml`](action.yml): paths and globs per check, a fail
 threshold for skillxray, zizmor and checkout-safety, and a size cap for the secrets scan.
 
+A check toggle takes `true` or `false`, in any case. Anything else, a typo like `"yes"` or
+an empty string, fails that check and names the value, rather than quietly turning it off.
+
 ## The combined summary
 
 Every enabled check writes its own section to `$GITHUB_STEP_SUMMARY`, so a PR shows one
