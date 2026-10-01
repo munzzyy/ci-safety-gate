@@ -61,6 +61,8 @@ _WORKFLOW_RUN_HINT = "github.event.workflow_run"
 _BASE_HINTS = (".base.", "base_ref")
 # A `repository:` naming the fork checks out fork code whatever the ref.
 _FORK_REPO_HINTS = ("head.repo", "head_repository")
+# A job calling a reusable workflow from this repo's own .github/workflows.
+_LOCAL_CALL_RE = re.compile(r"""^\s*uses:\s*['"]?\./\.github/workflows/([^\s'"#@]+)""")
 # `ref:` / `repository:` as a block key or inside a flow mapping.
 _CHECKOUT_INPUT_RE = re.compile(r"(?:^|[\s{,])(ref|repository)\s*:")
 
@@ -197,7 +199,15 @@ def pin_kind(ref: str) -> str:
     return "moving"
 
 
-def scan_text(rel_path: str, text: str) -> list[Finding]:
+def local_calls(lines: list[str]) -> list[str]:
+    """File names of the reusable workflows in this repo that `lines` calls."""
+    return [m.group(1) for m in map(_LOCAL_CALL_RE.match, lines) if m]
+
+
+def scan_text(rel_path: str, text: str, called_from: tuple[str, ...] = ()) -> list[Finding]:
+    """`called_from` names the risky workflows that call this one as a
+    reusable workflow. github.event there is the caller's event, so the
+    caller's trigger counts as this file's own."""
     lines = text.splitlines()
     findings: list[Finding] = []
 
@@ -217,8 +227,14 @@ def scan_text(rel_path: str, text: str) -> list[Finding]:
             ),
         ))
 
-    if not has_risky_trigger(lines):
+    own_trigger = has_risky_trigger(lines)
+    if not own_trigger and not called_from:
         return findings
+    if own_trigger:
+        where = f"this workflow runs on {' or '.join(RISKY_TRIGGERS)} and pins"
+    else:
+        where = (f"this reusable workflow is called from {', '.join(called_from)}, which "
+                 f"runs on {' or '.join(RISKY_TRIGGERS)}, and it pins")
 
     for i, line in enumerate(lines, start=1):
         if line.lstrip().startswith("#"):
@@ -236,8 +252,7 @@ def scan_text(rel_path: str, text: str) -> list[Finding]:
             path=rel_path, line=i, severity="high" if pr_head else "medium",
             rule="stale-checkout-pin",
             message=(
-                f"this workflow runs on {' or '.join(RISKY_TRIGGERS)} and pins "
-                f"actions/checkout to {ref}. The safe-by-default refusal to fetch "
+                f"{where} actions/checkout to {ref}. The safe-by-default refusal to fetch "
                 "fork pull request code, backported 2026-07-20, does not reach a "
                 "SHA, minor or patch pin"
                 + (" and this step checks out the pull request head, so fork code "
@@ -251,17 +266,47 @@ def scan_text(rel_path: str, text: str) -> list[Finding]:
     return sorted(findings, key=lambda f: f.line)
 
 
+def risky_callers(texts: dict[str, tuple[str, str]]) -> dict[str, tuple[str, ...]]:
+    """For each workflow file name, the risky workflows that call it as a
+    reusable workflow, directly or through other reusable workflows.
+
+    `texts` maps a file name to (display path, text).
+    """
+    calls = {name: local_calls(text.splitlines()) for name, (_, text) in texts.items()}
+    queue = [name for name, (_, text) in texts.items() if has_risky_trigger(text.splitlines())]
+    reached = set(queue)
+    callers: dict[str, set[str]] = {}
+    while queue:
+        name = queue.pop()
+        for callee in calls[name]:
+            if callee not in texts:
+                continue
+            callers.setdefault(callee, set()).add(texts[name][0])
+            if callee not in reached:
+                reached.add(callee)
+                queue.append(callee)
+    return {name: tuple(sorted(paths)) for name, paths in callers.items()}
+
+
 def scan(root: Path) -> tuple[list[Finding], int]:
-    findings: list[Finding] = []
     files = workflow_files(root)
+    read: list[tuple[str, str, OSError | None]] = []
     for path in files:
         try:
             rel = path.relative_to(root).as_posix() if root.is_dir() else path.name
         except ValueError:
             rel = path.as_posix()
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            read.append((rel, path.read_text(encoding="utf-8", errors="replace"), None))
         except OSError as exc:
+            read.append((rel, "", exc))
+    texts = {path.name: (rel, text)
+             for path, (rel, text, exc) in zip(files, read) if exc is None}
+    callers = risky_callers(texts) if root.is_dir() else {}
+
+    findings: list[Finding] = []
+    for path, (rel, text, exc) in zip(files, read):
+        if exc is not None:
             # Fail loud: a workflow nobody could read is not a workflow
             # that passed.
             findings.append(Finding(
@@ -269,7 +314,7 @@ def scan(root: Path) -> tuple[list[Finding], int]:
                 message=f"could not read this workflow, so it was not checked ({exc})",
             ))
             continue
-        findings.extend(scan_text(rel, text))
+        findings.extend(scan_text(rel, text, callers.get(path.name, ())))
     return findings, len(files)
 
 

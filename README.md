@@ -68,6 +68,11 @@ neither is an exact tag from v7.0.0 on, since v7 shipped with it. The default
 `checkout-safety-fail-on` is `high`, so a stale pin is reported without failing your build;
 set it to `medium` to enforce.
 
+A reusable workflow in the same repo (`uses: ./.github/workflows/build.yml`) that one of
+those workflows calls, directly or through another reusable workflow, gets the same check.
+It runs with its caller's event, so a stale head checkout there runs fork code with the
+caller's secrets. The finding names the caller.
+
 ## The secrets scan
 
 A file it could not read (too large, unreadable, binary, or a symlink it will not follow)

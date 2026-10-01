@@ -426,3 +426,61 @@ def test_workflow_run_refs_count_as_the_head_unless_they_ask_for_a_base(tmp_path
     )})
     findings, _ = checkout_safety.scan(root)
     assert _stale_pins(findings) == [("stale-checkout-pin", severity)]
+
+
+# ---------------------------------------------------------------------------
+# A reusable workflow runs with its caller's event, so a pull_request_target
+# caller makes the called file's checkout just as dangerous.
+# ---------------------------------------------------------------------------
+
+def _caller(trigger: str, target: str = "./.github/workflows/build.yml") -> str:
+    return (
+        "name: caller\n"
+        f"on:\n  {trigger}:\n"
+        "jobs:\n"
+        "  build:\n"
+        f"    uses: {target}\n"
+        "    secrets: inherit\n"
+    )
+
+
+REUSABLE_BUILD = _workflow("on:\n  workflow_call:\n", HEAD_CHECKOUT)
+
+
+def test_a_reusable_workflow_called_from_pull_request_target_is_checked(tmp_path):
+    root = _repo(tmp_path, {
+        "caller.yml": _caller("pull_request_target"),
+        "build.yml": REUSABLE_BUILD,
+    })
+    findings, _ = checkout_safety.scan(root)
+    assert [(f.path, f.rule, f.severity) for f in findings] == [
+        (".github/workflows/build.yml", "stale-checkout-pin", "high"),
+    ]
+    assert ".github/workflows/caller.yml" in findings[0].message
+    assert checkout_safety.main([str(root)]) == 1
+
+
+def test_a_reusable_workflow_called_only_from_push_is_not_flagged(tmp_path):
+    root = _repo(tmp_path, {"caller.yml": _caller("push"), "build.yml": REUSABLE_BUILD})
+    findings, _ = checkout_safety.scan(root)
+    assert findings == []
+
+
+def test_a_nested_reusable_workflow_inherits_the_risky_trigger(tmp_path):
+    root = _repo(tmp_path, {
+        "caller.yml": _caller("pull_request_target", "./.github/workflows/middle.yml"),
+        "middle.yml": (
+            "name: middle\non:\n  workflow_call:\njobs:\n  build:\n"
+            "    uses: ./.github/workflows/build.yml\n"
+        ),
+        "build.yml": REUSABLE_BUILD,
+    })
+    findings, _ = checkout_safety.scan(root)
+    assert [(f.path, f.severity) for f in findings] == [(".github/workflows/build.yml", "high")]
+
+
+def test_a_call_to_a_missing_workflow_does_not_crash(tmp_path):
+    root = _repo(tmp_path, {"caller.yml": _caller("pull_request_target", "./.github/workflows/gone.yml")})
+    findings, files = checkout_safety.scan(root)
+    assert findings == []
+    assert files == 1

@@ -32,6 +32,13 @@
   `.claude/`. A `.claude-plugin/` directory counts now, in the action and in
   `--local`.
 
+### Added
+
+- checkout-safety follows reusable workflows in the same repo. One called
+  from a `pull_request_target` or `workflow_run` workflow, directly or
+  through another reusable workflow, is checked as if it had that trigger,
+  and the finding names the caller.
+
 ### Changed
 
 - Relicensed to GPL-3.0-or-later. Releases up to v0.1.1 were under MIT.
