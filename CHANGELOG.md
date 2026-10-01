@@ -16,6 +16,9 @@
   only medium, which passes at the default threshold: `github.head_ref` with
   the fork as `repository:`, `refs/pull/<number>/merge`, and a `ref:` inside a
   flow mapping. It also skipped `uses: Actions/Checkout@...` over the case.
+- The secrets scan's OpenAI pattern missed any project key (`sk-proj-`) with
+  a `-` or `_` early in its body, and never matched service account
+  (`sk-svcacct-`) or admin (`sk-admin-`) keys.
 
 ### Changed
 
