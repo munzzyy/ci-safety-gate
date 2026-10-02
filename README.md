@@ -240,7 +240,7 @@ wants to branch on it instead.
 
 ## Roadmap
 
-What is left needs a release or a decision. More code in this repo will not do it.
+What is left needs a decision. More code in this repo will not do it.
 
 - A call on macOS and Windows runners. The unit tests run on all three, but the action's
   own bash has only ever run on `ubuntu-latest` (see Known limitations). Either the
