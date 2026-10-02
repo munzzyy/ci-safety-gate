@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ci-safety-gate"
-version = "0.1.1"
+version = "0.2.0"
 description = "Run the exact zizmor/skillxray/checkout-safety/secrets gate munzzyy/ci-safety-gate runs in CI, locally, before you open a PR."
 readme = "README.md"
 license = "GPL-3.0-or-later"

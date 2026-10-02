@@ -15,7 +15,7 @@ one bad finding anywhere fails the whole gate.
 
 ```yaml
 - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-- uses: munzzyy/ci-safety-gate@v0.1.1
+- uses: munzzyy/ci-safety-gate@v0.2.0
 ```
 
 That's it. Every check defaults to on. A full example, including a hardened checkout step,
@@ -100,7 +100,7 @@ rather than only in the job summary. Turn that off with `secrets-annotations: "f
 Every check is its own input, `"true"` by default:
 
 ```yaml
-- uses: munzzyy/ci-safety-gate@v0.1.1
+- uses: munzzyy/ci-safety-gate@v0.2.0
   with:
     skillxray: "false"    # skip if you know you have no skill/plugin content
     zizmor-min-severity: "high"
@@ -174,7 +174,7 @@ about a failure before it's a red PR instead of after:
 
 ```yaml
 -   repo: https://github.com/munzzyy/ci-safety-gate
-    rev: main  # pin to a tag once one exists
+    rev: v0.2.0
     hooks:
     -   id: ci-safety-gate
         additional_dependencies: ["zizmor>=1.28.0"]
@@ -216,8 +216,8 @@ The hook runs `ci-safety-gate --local` and picks up whatever flags you pass it w
   tools is whatever zizmor and skillxray ship; this action just installs them, runs them
   the same way every time, and merges the output. A finding a bundled tool misses, this
   gate misses too.
-- skillxray installs from a pinned commit of `munzzyy/skillxray` because it isn't on PyPI
-  yet. The pin is a full SHA rather than a tag, since a tag can be moved. Point
+- skillxray installs from a pinned commit of `munzzyy/skillxray`, not from PyPI, where
+  only an older 0.1.0 exists. The pin is a full SHA rather than a tag, since a tag can be moved. Point
   `skillxray-ref` at a newer commit when there is one, or drop this once it's on PyPI.
 - zizmor is installed with a `>=1.28.0` floor rather than an exact pin, so a fix in zizmor
   reaches you without waiting on a release here. 1.28.0 is the first version without
@@ -242,10 +242,6 @@ wants to branch on it instead.
 
 What is left needs a release or a decision. More code in this repo will not do it.
 
-- A release. Everything under Unreleased in the [changelog](CHANGELOG.md) is on `main`
-  only. `@v0.1.1` has none of it, the pre-commit hook included, so the hook example above
-  says `rev: main` for now. The live run on munzzyy/munzzyy still pins a commit from before
-  v0.1.1 and moves to the new tag too.
 - A call on macOS and Windows runners. The unit tests run on all three, but the action's
   own bash has only ever run on `ubuntu-latest` (see Known limitations). Either the
   integration job gets a macOS and Windows matrix and goes green there, or the action says
